@@ -1,0 +1,85 @@
+{
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/images/amazon.png",
+      "48": "assets/images/amazon.png",
+      "128": "assets/images/amazon.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.91556b635ba7.js"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "content-application.e16916402939.js"
+      ],
+      "matches": [
+        "https://www.jobsatamazon.co.uk/application*",
+        "https://jobsatamazon.co.uk/application*"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "css": [
+        "sweetalert.9ff7b8cfb478.css",
+        "content.b5c228e37c8b.css"
+      ],
+      "js": [
+        "sweetalert.f8f749179a9b.js",
+        "content-main.f921bfdce7fb.js"
+      ],
+      "matches": [
+        "https://www.jobsatamazon.co.uk/*",
+        "https://jobsatamazon.co.uk/*",
+        "*://auth.hiring.amazon.com/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "description": "Amazon Warehouse UK — automatically books UK Amazon warehouse shifts as soon as a matching slot opens.",
+  "externally_connectable": {
+    "matches": [
+      "https://www.jobsatamazon.co.uk/*",
+      "https://jobsatamazon.co.uk/*",
+      "*://auth.hiring.amazon.com/*"
+    ]
+  },
+  "host_permissions": [
+    "https://www.jobsatamazon.co.uk/*",
+    "https://jobsatamazon.co.uk/*",
+    "*://auth.hiring.amazon.com/*"
+  ],
+  "icons": {
+    "16": "assets/images/amazon.png",
+    "48": "assets/images/amazon.png",
+    "128": "assets/images/amazon.png"
+  },
+  "incognito": "spanning",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqDMxYWrS0Npu5VBsblYE2JmavFQDSjvwDb/EW/LQcs/ExOwNmMCgzqMx544BUFUiPgfp8U0aISWapCPiVCaUJxx5WIBq/RjfyLqLObV8wJJNo/fW9aA4xuHPgP4NKsFwiLTKeMeaNdI5mDq/kf+B3SP5usMfl8dNzQua0BRboFPr1GnMfbAsPEohhchkY6irrQ2qGngBNlFEZAE1AibisBfS5L85kMZ+2L4rXrqPcycuzD34frmq0ABvxRf80EWDH5Qq/nh6NMFK+LODg7c+5B5g0rk6oNHTdn2rnU9eA+kXFD0Yy+5XQfJ8J4yDMe2SRuurvViVTNYDFO2ZixeOKQIDAQAB",
+  "manifest_version": 3,
+  "name": "Amazon Warehouse UK",
+  "permissions": [
+    "tabs",
+    "storage",
+    "activeTab",
+    "declarativeContent",
+    "scripting"
+  ],
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  "version": "1.14.0",
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "assets/images/amazon.png",
+        "assets/sounds/alert.wav",
+        "assets/sounds/alert_long.wav",
+        "assets/fonts/Quicksand.ttf"
+      ]
+    }
+  ]
+}

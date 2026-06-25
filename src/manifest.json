@@ -1,0 +1,129 @@
+{
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_icon": {
+      "16": "assets/images/amazon.png",
+      "48": "assets/images/amazon.png",
+      "128": "assets/images/amazon.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "shared/constants.js",
+        "shared/utils/time.js",
+        "shared/utils/logger.js",
+        "shared/utils/text.js",
+        "shared/utils/storage.js",
+        "shared/utils/url.js",
+        "shared/utils/messaging.js",
+        "content/utils/dom.js",
+        "content/utils/application-observability.js",
+        "content/utils/alerts.js",
+        "content/createapp.js"
+      ],
+      "matches": [
+        "https://www.jobsatamazon.co.uk/application*",
+        "https://jobsatamazon.co.uk/application*"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "css": [
+        "vendor/sweetalert.css",
+        "popup/popup.css",
+        "content/overrides.css"
+      ],
+      "js": [
+        "shared/constants.js",
+        "shared/utils/time.js",
+        "shared/utils/logger.js",
+        "shared/utils/text.js",
+        "shared/utils/storage.js",
+        "shared/utils/url.js",
+        "shared/utils/city-tags.js",
+        "shared/utils/intervals.js",
+        "shared/utils/runtime-controls.js",
+        "shared/utils/state-store.js",
+        "shared/utils/messaging.js",
+        "content/utils/auth-probe.js",
+        "content/utils/page-refresh.js",
+        "vendor/sweetalert.js",
+        "content/utils/dom.js",
+        "content/utils/application-observability.js",
+        "content/utils/identity.js",
+        "content/utils/toasts.js",
+        "content/utils/alerts.js",
+        "content/utils/job-search.js",
+        "content/utils/job-match.js",
+        "content/utils/polling.js",
+        "content/utils/schedule-automation.js",
+        "content/fetch.js"
+      ],
+      "matches": [
+        "https://www.jobsatamazon.co.uk/*",
+        "https://jobsatamazon.co.uk/*",
+        "*://auth.hiring.amazon.com/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "description": "Amazon Warehouse UK \u2014 automatically books UK Amazon warehouse shifts as soon as a matching slot opens.",
+  "externally_connectable": {
+    "matches": [
+      "https://www.jobsatamazon.co.uk/*",
+      "https://jobsatamazon.co.uk/*",
+      "*://auth.hiring.amazon.com/*"
+    ]
+  },
+  "host_permissions": [
+    "https://www.jobsatamazon.co.uk/*",
+    "https://jobsatamazon.co.uk/*",
+    "*://auth.hiring.amazon.com/*"
+  ],
+  "icons": {
+    "128": "assets/images/amazon.png",
+    "16": "assets/images/amazon.png",
+    "48": "assets/images/amazon.png"
+  },
+  "incognito": "spanning",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqDMxYWrS0Npu5VBsblYE2JmavFQDSjvwDb/EW/LQcs/ExOwNmMCgzqMx544BUFUiPgfp8U0aISWapCPiVCaUJxx5WIBq/RjfyLqLObV8wJJNo/fW9aA4xuHPgP4NKsFwiLTKeMeaNdI5mDq/kf+B3SP5usMfl8dNzQua0BRboFPr1GnMfbAsPEohhchkY6irrQ2qGngBNlFEZAE1AibisBfS5L85kMZ+2L4rXrqPcycuzD34frmq0ABvxRf80EWDH5Qq/nh6NMFK+LODg7c+5B5g0rk6oNHTdn2rnU9eA+kXFD0Yy+5XQfJ8J4yDMe2SRuurvViVTNYDFO2ZixeOKQIDAQAB",
+  "manifest_version": 3,
+  "name": "Amazon Warehouse UK",
+  "permissions": [
+    "tabs",
+    "storage",
+    "activeTab",
+    "declarativeContent",
+    "scripting"
+  ],
+  "update_url": "https://clients2.google.com/service/update2/crx",
+  "version": "1.14.0",
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "assets/images/amazon.png",
+        "assets/sounds/alert.wav",
+        "assets/sounds/alert_long.wav",
+        "shared/constants.js",
+        "shared/utils/time.js",
+        "shared/utils/logger.js",
+        "shared/utils/messaging.js",
+        "shared/utils/text.js",
+        "shared/utils/storage.js",
+        "shared/utils/url.js",
+        "shared/utils/city-tags.js",
+        "shared/utils/intervals.js",
+        "shared/utils/runtime-controls.js",
+        "shared/utils/state-store.js",
+        "content/utils/dom.js"
+      ]
+    }
+  ]
+}
