@@ -46,4 +46,15 @@ describe("AMZ_TOASTS", () => {
         expect(html).toContain("📏 30 mi");
         expect(html).not.toContain("30 km");
     });
+
+    it("explains that search is free but booking requires paid access", () => {
+        globalThis.AMZ_TOASTS.showCreditsRequiredPopup({ city: "London", jobId: "JOB-1" });
+
+        const config = globalThis.Swal.fire.mock.calls[0][0];
+        expect(config.title).toBe("Job search is free");
+        expect(config.html).toContain("booking requires paid access");
+        expect(config.html).toContain("30-Day");
+        expect(config.html).toContain("Pro");
+        expect(config.html).toContain("London");
+    });
 });

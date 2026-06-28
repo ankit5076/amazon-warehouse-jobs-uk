@@ -2,9 +2,9 @@
   "action": {
     "default_popup": "popup/index.html",
     "default_icon": {
-      "16": "assets/images/amazon.png",
-      "48": "assets/images/amazon.png",
-      "128": "assets/images/amazon.png"
+      "16": "assets/images/uk-flag.png",
+      "48": "assets/images/uk-flag.png",
+      "128": "assets/images/uk-flag.png"
     }
   },
   "background": {
@@ -18,6 +18,9 @@
         "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
+        "shared/utils/license-api.js",
+        "shared/utils/license-state.js",
+        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/messaging.js",
         "content/utils/dom.js",
@@ -43,6 +46,9 @@
         "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
+        "shared/utils/license-api.js",
+        "shared/utils/license-state.js",
+        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
@@ -71,7 +77,7 @@
       "run_at": "document_idle"
     }
   ],
-  "description": "Amazon Warehouse UK \u2014 automatically books UK Amazon warehouse shifts as soon as a matching slot opens.",
+  "description": "Amazon Warehouse UK — automatically books UK Amazon warehouse shifts as soon as a matching slot opens.",
   "externally_connectable": {
     "matches": [
       "https://www.jobsatamazon.co.uk/*",
@@ -82,15 +88,16 @@
   "host_permissions": [
     "https://www.jobsatamazon.co.uk/*",
     "https://jobsatamazon.co.uk/*",
-    "*://auth.hiring.amazon.com/*"
+    "*://auth.hiring.amazon.com/*",
+    "https://getslotnow.com/*"
   ],
   "icons": {
-    "128": "assets/images/amazon.png",
-    "16": "assets/images/amazon.png",
-    "48": "assets/images/amazon.png"
+    "16": "assets/images/uk-flag.png",
+    "48": "assets/images/uk-flag.png",
+    "128": "assets/images/uk-flag.png"
   },
   "incognito": "spanning",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqDMxYWrS0Npu5VBsblYE2JmavFQDSjvwDb/EW/LQcs/ExOwNmMCgzqMx544BUFUiPgfp8U0aISWapCPiVCaUJxx5WIBq/RjfyLqLObV8wJJNo/fW9aA4xuHPgP4NKsFwiLTKeMeaNdI5mDq/kf+B3SP5usMfl8dNzQua0BRboFPr1GnMfbAsPEohhchkY6irrQ2qGngBNlFEZAE1AibisBfS5L85kMZ+2L4rXrqPcycuzD34frmq0ABvxRf80EWDH5Qq/nh6NMFK+LODg7c+5B5g0rk6oNHTdn2rnU9eA+kXFD0Yy+5XQfJ8J4yDMe2SRuurvViVTNYDFO2ZixeOKQIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAneNg717w/QtXGOJWw7WhrBiBHpVrw5vIJyUBe7bYFbzix6+cZp7Sl9wD1qIA2zDkVZblTKFDrRPRU8RPGt/pNWrpfeDVM5mGf33Ab/Q96ZonIgPRglaQiIs4HtOTUX/jXcIglP4qD0PnDF2JP44Z2O+9n6pRqsZjcOYAOnjuU5r6k8bMhPP9eqxe5y+AfnSaeNhzXimTa3zpR/Q27Wtap1LTSPhgfShufLE8aqaiNO018SE7+OlWqCstCNpf5xrVolNAOrG790qD5lZwAyHkKaNqVNmUqdCAsouRiPJKxnHHumbHrvHekWZyX4R57jG2KH8olGPyHofzh98uGP8iKwIDAQAB",
   "manifest_version": 3,
   "name": "Amazon Warehouse UK",
   "permissions": [
@@ -101,14 +108,14 @@
     "scripting"
   ],
   "update_url": "https://clients2.google.com/service/update2/crx",
-  "version": "1.14.0",
+  "version": "0.0.1",
   "web_accessible_resources": [
     {
       "matches": [
         "<all_urls>"
       ],
       "resources": [
-        "assets/images/amazon.png",
+        "assets/images/uk-flag.png",
         "assets/sounds/alert.wav",
         "assets/sounds/alert_long.wav",
         "shared/constants.js",
@@ -117,6 +124,9 @@
         "shared/utils/messaging.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
+        "shared/utils/license-api.js",
+        "shared/utils/license-state.js",
+        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",

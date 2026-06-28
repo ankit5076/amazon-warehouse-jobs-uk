@@ -266,6 +266,27 @@
     return false;
   }
 
+  async function ensurePaymentAllowed(reason) {
+    const result = await root.AMZ_PAYMENT_GATE.requireAllowed({
+      refresh: true,
+      allowStaleOnFailure: true,
+      maxAgeMs: root.AMZ_CONSTANTS.PAYMENT_GATE.BOOKING_CACHE_MAX_AGE_MS,
+    });
+    if (result.ok) return true;
+    log.warn('payment gate blocked automation', {
+      reason,
+      details: result.reason,
+    });
+    toasts.showCreditsRequiredPopup({
+      reason: result.reason || 'credits-required',
+    });
+    renderPollingStatus({
+      state: 'failed',
+      details: result.reason || 'Paid access is required before booking.',
+    });
+    return false;
+  }
+
   function getEffectiveIntervalMs() {
     const wafBackoffMs = Math.max(0, pollerState.graphqlWafBackoffUntil - Date.now());
     return Math.max(pollerState.intervalMs, wafBackoffMs);
@@ -689,6 +710,24 @@
     }
     if (!matchedJob) return null;
 
+    const gate = await root.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: false });
+    if (!gate.ok) {
+      log.warn('matched job blocked by payment gate', {
+        job: jobMatcher.summarizeJob(matchedJob),
+        reason: gate.reason,
+      });
+      toasts.showCreditsRequiredPopup({
+        city: matchedJob.city,
+        jobId: matchedJob.jobId || null,
+        reason: gate.reason || 'credits-required',
+      });
+      renderPollingStatus({
+        state: 'failed',
+        details: gate.reason || 'Paid access is required before automation can continue.',
+      });
+      return null;
+    }
+
     // Sound and metadata are optional side effects and must not delay navigation.
     void root.AMZ_ALERTS.playJobFoundSound();
     toasts.showJobFoundToast(matchedJob.city);
@@ -865,6 +904,7 @@
     }
 
     if (root.AMZ_URL.isJobDetailPage() && pollerState.isActive) {
+      if (!await ensurePaymentAllowed('job-detail')) return;
       log.debug('job detail page active; starting schedule automation');
       scheduleAutomation.start();
     }
@@ -1018,7 +1058,11 @@
         isActive: pollerState.isActive,
       });
       if (pollerState.isActive) {
-        void handlePageNavigation();
+        void (async () => {
+          if (await ensurePaymentAllowed('runtime-message')) {
+            await handlePageNavigation();
+          }
+        })();
       } else {
         stopAutomation();
       }

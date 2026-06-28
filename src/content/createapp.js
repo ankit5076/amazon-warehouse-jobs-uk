@@ -20,6 +20,7 @@
   let scanTimer = null;
   let watchdogTimer = null;
   let routeListenersInstalled = false;
+  let enableRequestId = 0;
   const clickedKeys = new Set();
   const seenTraceRoutes = new Set();
   const acceptOfferState = {
@@ -238,12 +239,41 @@
     });
   }
 
+  async function recordBookingCreditUsage(context, pageUrl, workflowStepName, scheduleId) {
+    try {
+      const usage = await root.AMZ_PAYMENT_GATE.consumeBookingCredit({
+        jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
+        scheduleId: scheduleId || context.applicationId || null,
+        metadata: {
+          source: 'accept-offer-confirmed',
+          applicationId: context.applicationId || null,
+          workflowStepName: workflowStepName || null,
+          pageUrl,
+        },
+      });
+      if (!usage?.ok) {
+        log.warn('booking credit deduction failed after accept offer confirmation', {
+          reason: usage?.reason || 'usage-denied',
+          jobId: context.jobId || null,
+          scheduleId,
+        });
+      }
+    } catch (error) {
+      log.warn('booking credit deduction failed after accept offer confirmation', {
+        message: error?.message || String(error),
+        jobId: context.jobId || null,
+        scheduleId,
+      });
+    }
+  }
+
   function notifyAcceptOfferConfirmed(pageUrl = window.location.href, workflowStepName = getApplicationHashRoute()) {
     if (acceptOfferState.notificationSent) return;
     acceptOfferState.notificationSent = true;
     const context = getApplicationContext(pageUrl);
     const scheduleId = context.scheduleId || root.AMZ_URL.getScheduleIdFromUrl?.(pageUrl) || null;
     finalizeAcceptOfferObservability(pageUrl, workflowStepName, context, scheduleId);
+    void recordBookingCreditUsage(context, pageUrl, workflowStepName, scheduleId);
     log.info('accept offer confirmed locally', {
       jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
       scheduleId,
@@ -544,14 +574,41 @@
   }
 
   function setEnabled(nextEnabled) {
+    const requestId = ++enableRequestId;
     const wasEnabled = enabled;
-    enabled = nextEnabled === true;
-    if (!enabled) {
+    if (nextEnabled !== true) {
+      enabled = false;
       cleanup();
       return;
     }
-    if (!wasEnabled) resetRunState();
-    ensureObserver();
+
+    root.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true }).then(result => {
+      if (requestId !== enableRequestId) return;
+      if (!result.ok) {
+        enabled = false;
+        cleanup();
+        void root.AMZ_STORAGE.setLocal({
+          [root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE]: false,
+        });
+        log.warn('native application automation blocked by payment gate', {
+          reason: result.reason,
+        });
+        return;
+      }
+      enabled = true;
+      if (!wasEnabled) resetRunState();
+      ensureObserver();
+    }).catch(error => {
+      if (requestId !== enableRequestId) return;
+      enabled = false;
+      cleanup();
+      void root.AMZ_STORAGE.setLocal({
+        [root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE]: false,
+      });
+      log.warn('native application automation payment check failed', {
+        errorMessage: error?.message || String(error),
+      });
+    });
   }
 
   root.__amazonCreateAppAutomation = Object.freeze({

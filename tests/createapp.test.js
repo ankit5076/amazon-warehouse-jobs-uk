@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { loadSharedScripts, unloadSharedNamespaces } from "./_load.js";
 
-function tick() {
-    return Promise.resolve();
+async function tick() {
+    for (let index = 0; index < 5; index += 1) {
+        await Promise.resolve();
+    }
 }
 
 function createTestLogger() {
@@ -89,6 +91,11 @@ function setupCreateAppHarness(options = {}) {
             }
             return Object.prototype.hasOwnProperty.call(values, keys) ? { [keys]: values[keys] } : {};
         }),
+        setLocal: vi.fn(async () => {}),
+    };
+    globalThis.AMZ_PAYMENT_GATE = {
+        requireAllowed: vi.fn(async () => ({ ok: true, license: {} })),
+        consumeBookingCredit: vi.fn(async () => ({ ok: true })),
     };
     if (options.applicationObservability) {
         globalThis.AMZ_APPLICATION_OBSERVABILITY = options.applicationObservability;
@@ -117,6 +124,7 @@ describe("Create Application automation", () => {
         delete globalThis.AMZ_LOGGER;
         delete globalThis.AMZ_URL;
         delete globalThis.AMZ_STORAGE;
+        delete globalThis.AMZ_PAYMENT_GATE;
         delete globalThis.AMZ_APPLICATION_OBSERVABILITY;
         unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_APPLICATION_OBSERVABILITY", "__amazonCreateAppAutomation"]);
     });

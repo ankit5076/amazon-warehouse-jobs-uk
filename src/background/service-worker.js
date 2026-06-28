@@ -8,6 +8,9 @@ try {
     '../shared/utils/logger.js',
     '../shared/utils/text.js',
     '../shared/utils/storage.js',
+    '../shared/utils/license-api.js',
+    '../shared/utils/license-state.js',
+    '../shared/utils/payment-gate.js',
     '../shared/utils/url.js',
     '../shared/utils/messaging.js',
     './tab-service.js'

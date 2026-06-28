@@ -9,7 +9,7 @@ function tick() {
 }
 
 async function flushPopup() {
-    for (let index = 0; index < 20; index += 1) await tick();
+    for (let index = 0; index < 40; index += 1) await tick();
 }
 
 function installPopupDom() {
@@ -22,19 +22,30 @@ function installPopupDom() {
               <option value="debug">Debug</option>
               <option value="off">Off</option>
             </select>
-            <input id="activate" type="checkbox">
-            <select id="jobType" multiple></select>
-            <input id="fetch_interval_value" type="number">
-            <select id="fetch_interval_unit">
-              <option value="ms">Milliseconds</option>
-              <option value="s">Seconds</option>
-            </select>
-            <button id="add-all-cities" type="button"></button>
-            <span id="city-scope-status"></span>
-            <button id="select-all-job-types" type="button"></button>
-            <form id="ais_visa_info"><button id="reset_info" type="submit"></button></form>
-            <div class="tag-input-container">
-              <small id="local-settings-status"></small>
+            <div class="toggle-section">
+              <input id="activate" type="checkbox">
+            </div>
+            <div class="credit-actions">
+              <button id="checkout_btn" data-plan="credits" type="button">Get 30 days</button>
+              <button id="checkout_pro_btn" data-plan="pro" type="button">Go Pro</button>
+              <small id="license-status"></small>
+            </div>
+            <div class="dropdowns-container" data-authenticated-section>
+              <div class="field"><select id="city"></select></div>
+              <div class="field"><select id="distance"></select></div>
+              <select id="jobType" multiple></select>
+              <input id="fetch_interval_value" type="number">
+              <select id="fetch_interval_unit">
+                <option value="ms">Milliseconds</option>
+                <option value="s">Seconds</option>
+              </select>
+              <button id="add-all-cities" type="button"></button>
+              <button id="select-all-job-types" type="button"></button>
+            </div>
+            <form id="refresh_info" data-authenticated-section><button id="refresh_btn" type="submit"></button></form>
+            <form id="ais_visa_info" data-authenticated-section><button id="reset_info" type="submit"></button></form>
+            <div class="tag-input-container" data-authenticated-section>
+              <span id="city-scope-status"></span>
               <div id="tag-input-box"><input id="city-input"></div>
             </div>
             <button id="clear-all" type="button"></button>
@@ -120,6 +131,9 @@ async function loadPopup(store = {}) {
         "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
+        "shared/utils/license-api.js",
+        "shared/utils/license-state.js",
+        "shared/utils/payment-gate.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
         "shared/utils/runtime-controls.js",
@@ -141,6 +155,9 @@ describe("local-only popup", () => {
             "AMZ_LOGGER",
             "AMZ_TEXT",
             "AMZ_STORAGE",
+            "AMZ_LICENSE_API",
+            "AMZ_LICENSE_STATE",
+            "AMZ_PAYMENT_GATE",
             "AMZ_CITY_TAGS",
             "AMZ_INTERVALS",
             "AMZ_RUNTIME_CONTROLS",
@@ -157,15 +174,23 @@ describe("local-only popup", () => {
         vi.restoreAllMocks();
     });
 
-    it("has no admin, backend, or client picker markup", () => {
+    it("shows booking controls first and keeps email fields out of the landing markup", () => {
         const html = readFileSync(resolve("src", "popup", "index.html"), "utf8");
+        expect(html).toContain("checkout_btn");
+        expect(html).toContain("checkout_pro_btn");
+        expect(html).toContain("$50");
+        expect(html).toContain("$120");
+        expect(html).toContain("id=\"city\"");
+        expect(html).toContain("id=\"distance\"");
+        expect(html).not.toContain("buyer_email");
+        expect(html).not.toContain("extension_username");
         expect(html).not.toContain("admin_login_btn");
         expect(html).not.toContain("fetch_clients_btn");
         expect(html).not.toContain("shared/api-client.js");
         expect(html).not.toContain("shared/validation.js");
     });
 
-    it("requires a local location scope before activation", async () => {
+    it("requires local location scope but not payment before activation", async () => {
         const store = await loadPopup();
 
         expect(document.getElementById("activate").disabled).toBe(true);
@@ -178,14 +203,34 @@ describe("local-only popup", () => {
         expect(store.cityTags).toEqual(["London"]);
         expect(store.allCitiesSelected).toBe(false);
         expect(document.getElementById("activate").disabled).toBe(false);
+        expect(document.getElementById("license-status").textContent).toMatch(/Search is free/);
     });
 
-    it("activates with Any UK location and notifies the active tab", async () => {
-        const store = await loadPopup();
+    it("activates with All cities and notifies the active tab", async () => {
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ allowed: true, credits: 2 }),
+        });
+        const store = await loadPopup({
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "paid@example.com",
+            licenseEmail: "paid@example.com",
+            licenseState: {
+                allowed: true,
+                credits: 2,
+                isProUser: false,
+                emailId: "buyer@example.com",
+                amazonEmailId: "paid@example.com",
+                email: "paid@example.com",
+                expiresAt: Date.now() + 60000,
+            },
+        });
+        const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
 
         document.getElementById("add-all-cities").click();
         await flushPopup();
-        expect(store.allCitiesSelected).toBe(true);
+        expect(store[STORAGE_KEYS.ALL_CITIES_SELECTED]).toBe(true);
         expect(document.getElementById("activate").disabled).toBe(false);
 
         const activate = document.getElementById("activate");
@@ -200,6 +245,29 @@ describe("local-only popup", () => {
         });
     });
 
+    it("opens hosted checkout pages without collecting emails in the popup", async () => {
+        const store = await loadPopup();
+        const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
+        const openSpy = vi.spyOn(globalThis.window, "open").mockImplementation(() => null);
+        globalThis.fetch = vi.fn();
+
+        expect(document.getElementById("checkout-buyer-email")).toBeNull();
+        expect(document.getElementById("checkout-amazon-email")).toBeNull();
+
+        document.getElementById("checkout_pro_btn").click();
+        await flushPopup();
+
+        expect(store[STORAGE_KEYS.LICENSE_BUYER_EMAIL]).toBeUndefined();
+        expect(store[STORAGE_KEYS.LICENSE_AMAZON_EMAIL]).toBeUndefined();
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(openSpy).toHaveBeenNthCalledWith(
+            1,
+            "https://getslotnow.com/extension-usage-tracker/checkout/amazon-warehouse-jobs-uk?plan=pro",
+            "_blank",
+            "noopener,noreferrer"
+        );
+    });
+
     it("reset clears stale service and credential keys", async () => {
         const store = await loadPopup({
             __amz_operator_username: "admin",
@@ -210,7 +278,20 @@ describe("local-only popup", () => {
             cityTags: ["London"],
             allCitiesSelected: true,
             __ap: true,
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "paid@example.com",
+            licenseEmail: "paid@example.com",
+            licenseState: {
+                allowed: true,
+                credits: 2,
+                isProUser: false,
+                emailId: "buyer@example.com",
+                amazonEmailId: "paid@example.com",
+                email: "paid@example.com",
+                expiresAt: Date.now() + 60000,
+            },
         });
+        const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
 
         document.getElementById("ais_visa_info").dispatchEvent(
             new window.Event("submit", { bubbles: true, cancelable: true })
@@ -223,5 +304,8 @@ describe("local-only popup", () => {
         expect(store.__pw).toBeUndefined();
         expect(store.__amz_selected_client_id).toBeUndefined();
         expect(store.__ap).toBe(false);
+        expect(store[STORAGE_KEYS.LICENSE_BUYER_EMAIL]).toBe("buyer@example.com");
+        expect(store[STORAGE_KEYS.LICENSE_AMAZON_EMAIL]).toBe("paid@example.com");
+        expect(store[STORAGE_KEYS.LICENSE_EMAIL]).toBe("paid@example.com");
     });
 });

@@ -9,8 +9,21 @@ describe("AMZ_CONSTANTS local-only configuration", () => {
         loadSharedScripts(["shared/constants.js"]);
     });
 
-    it("does not expose backend, notification, or validation configuration groups", () => {
-        expect(globalThis.AMZ_CONSTANTS.BACKEND).toBeUndefined();
+    it("exposes local runtime defaults without admin notification or validation groups", () => {
+        const { BACKEND } = globalThis.AMZ_CONSTANTS;
+
+        expect(BACKEND.PRODUCT_ID).toBe("amazon-warehouse-jobs-uk");
+        expect(BACKEND.FALLBACK_DEFAULTS.defaultInputs.selectedCity).toBe("London");
+        expect(BACKEND.FALLBACK_DEFAULTS.defaultInputs.distance).toBe("150");
+        expect(BACKEND.FALLBACK_DEFAULTS.fetchInterval.defaultMsValue).toBe(650);
+        expect(BACKEND.FALLBACK_DEFAULTS.jobSearch.fallbackDistanceKm).toBe(5);
+        expect(BACKEND.FALLBACK_DEFAULTS.jobSearch.fetchTimeoutMs).toBe(15000);
+        expect(BACKEND.FALLBACK_DEFAULTS.pageRefresh.jobSearchIntervalMs).toBe(120000);
+        expect(Object.keys(BACKEND.FALLBACK_DEFAULTS.cityCoordinates)).toHaveLength(66);
+        expect(BACKEND.FALLBACK_DEFAULTS.cityCoordinates.London).toEqual({
+            lat: 51.507218,
+            lng: -0.127586,
+        });
         expect(globalThis.AMZ_CONSTANTS.NOTIFICATIONS).toBeUndefined();
         expect(globalThis.AMZ_CONSTANTS.MESSAGE_ACTIONS.BACKEND_REQUEST).toBeUndefined();
         expect(globalThis.AMZ_CONSTANTS.MESSAGE_ACTIONS.NOTIFICATION_EVENT).toBeUndefined();
@@ -30,7 +43,7 @@ describe("AMZ_CONSTANTS local-only configuration", () => {
         }
     });
 
-    it("targets UK Amazon pages without backend host permissions", () => {
+    it("targets UK Amazon pages with only Amazon and license API host permissions", () => {
         const manifest = JSON.parse(readFileSync(resolve("src", "manifest.json"), "utf8"));
 
         expect(globalThis.AMZ_CONSTANTS.AMAZON.URLS.JOB_SEARCH)
@@ -39,8 +52,9 @@ describe("AMZ_CONSTANTS local-only configuration", () => {
             "https://www.jobsatamazon.co.uk/*",
             "https://jobsatamazon.co.uk/*",
             "*://auth.hiring.amazon.com/*",
+            "https://getslotnow.com/*",
         ]);
-        expect(JSON.stringify(manifest)).not.toContain("getslotnow");
+        expect(JSON.stringify(manifest)).not.toContain("alertmeasap");
         expect(JSON.stringify(manifest)).not.toContain("localhost:8080");
     });
 
