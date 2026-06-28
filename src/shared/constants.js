@@ -720,6 +720,7 @@
     ENDPOINTS: Object.freeze({
       CHECK: '/api/amazon-warehouse-jobs-uk/license/check',
       CHECKOUT: '/api/amazon-warehouse-jobs-uk/license/checkout',
+      PLANS: '/api/amazon-warehouse-jobs-uk/license/plans',
       USAGE: '/api/amazon-warehouse-jobs-uk/license/usage',
     }),
   });

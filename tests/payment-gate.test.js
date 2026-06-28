@@ -123,6 +123,19 @@ describe("shared payment gate", () => {
         );
     });
 
+    it("loads provider plan availability from the backend", async () => {
+        loadPaymentModules();
+        mockFetchJson({ plans: { access: true, pro: false } });
+
+        const response = await globalThis.AMZ_LICENSE_API.getPlans();
+
+        expect(response).toEqual({ access: true, pro: false });
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+            "https://getslotnow.com/extension-usage-tracker/api/amazon-warehouse-jobs-uk/license/plans",
+            expect.objectContaining({ method: "GET" })
+        );
+    });
+
 
     it("caches valid paid license state until expiry", async () => {
         const { STORAGE_KEYS } = (loadPaymentModules({

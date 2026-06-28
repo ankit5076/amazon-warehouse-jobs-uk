@@ -168,10 +168,20 @@ describe("local-only popup", () => {
         delete globalThis.window;
         delete globalThis.document;
         delete globalThis.chrome;
+        globalThis.fetch = vi.fn(url =>
+            Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve(String(url).includes("/license/plans")
+                    ? { plans: { access: true, pro: true } }
+                    : { allowed: false, isProUser: false }),
+            })
+        );
     });
 
     afterEach(() => {
         vi.restoreAllMocks();
+        delete globalThis.fetch;
     });
 
     it("shows booking controls first and keeps email fields out of the landing markup", () => {
