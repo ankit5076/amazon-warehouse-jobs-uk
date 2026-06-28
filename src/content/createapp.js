@@ -241,7 +241,7 @@
 
   async function recordBookingCreditUsage(context, pageUrl, workflowStepName, scheduleId) {
     try {
-      const usage = await root.AMZ_PAYMENT_GATE.consumeBookingCredit({
+      const usage = await root.AMZ_PAYMENT_GATE.recordBookingUsage({
         jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
         scheduleId: scheduleId || context.applicationId || null,
         metadata: {
@@ -252,14 +252,14 @@
         },
       });
       if (!usage?.ok) {
-        log.warn('booking credit deduction failed after accept offer confirmation', {
+        log.warn('booking usage recording failed after accept offer confirmation', {
           reason: usage?.reason || 'usage-denied',
           jobId: context.jobId || null,
           scheduleId,
         });
       }
     } catch (error) {
-      log.warn('booking credit deduction failed after accept offer confirmation', {
+      log.warn('booking usage recording failed after accept offer confirmation', {
         message: error?.message || String(error),
         jobId: context.jobId || null,
         scheduleId,

@@ -25,8 +25,8 @@ function installPopupDom() {
             <div class="toggle-section">
               <input id="activate" type="checkbox">
             </div>
-            <div class="credit-actions">
-              <button id="checkout_btn" data-plan="credits" type="button">Get 30 days</button>
+            <div class="access-actions">
+              <button id="checkout_btn" data-plan="access" type="button">Get 30 days</button>
               <button id="checkout_pro_btn" data-plan="pro" type="button">Go Pro</button>
               <small id="license-status"></small>
             </div>
@@ -210,7 +210,7 @@ describe("local-only popup", () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
-            json: () => Promise.resolve({ allowed: true, credits: 2 }),
+            json: () => Promise.resolve({ allowed: true }),
         });
         const store = await loadPopup({
             licenseBuyerEmail: "buyer@example.com",
@@ -218,7 +218,6 @@ describe("local-only popup", () => {
             licenseEmail: "paid@example.com",
             licenseState: {
                 allowed: true,
-                credits: 2,
                 isProUser: false,
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",
@@ -283,7 +282,6 @@ describe("local-only popup", () => {
             licenseEmail: "paid@example.com",
             licenseState: {
                 allowed: true,
-                credits: 2,
                 isProUser: false,
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",

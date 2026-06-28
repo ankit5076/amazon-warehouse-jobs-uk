@@ -278,7 +278,7 @@
       details: result.reason,
     });
     toasts.showCreditsRequiredPopup({
-      reason: result.reason || 'credits-required',
+      reason: result.reason || 'access-required',
     });
     renderPollingStatus({
       state: 'failed',
@@ -719,7 +719,7 @@
       toasts.showCreditsRequiredPopup({
         city: matchedJob.city,
         jobId: matchedJob.jobId || null,
-        reason: gate.reason || 'credits-required',
+        reason: gate.reason || 'access-required',
       });
       renderPollingStatus({
         state: 'failed',

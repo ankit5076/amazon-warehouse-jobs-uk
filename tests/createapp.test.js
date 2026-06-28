@@ -95,7 +95,7 @@ function setupCreateAppHarness(options = {}) {
     };
     globalThis.AMZ_PAYMENT_GATE = {
         requireAllowed: vi.fn(async () => ({ ok: true, license: {} })),
-        consumeBookingCredit: vi.fn(async () => ({ ok: true })),
+        recordBookingUsage: vi.fn(async () => ({ ok: true })),
     };
     if (options.applicationObservability) {
         globalThis.AMZ_APPLICATION_OBSERVABILITY = options.applicationObservability;

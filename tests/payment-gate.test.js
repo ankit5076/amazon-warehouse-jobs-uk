@@ -91,14 +91,14 @@ describe("shared payment gate", () => {
 
     it("normalizes license responses and checks the country-specific Amazon email endpoint", async () => {
         loadPaymentModules();
-        mockFetchJson({ allowed: true, credits: "3", isProUser: false, syncIntervalMs: "60000" });
+        mockFetchJson({ allowed: true, isProUser: false, accessExpiresAt: "2026-02-01T00:00:00.000Z", syncIntervalMs: "60000" });
 
         const response = await globalThis.AMZ_LICENSE_API.checkLicense({ amazonEmailId: " Paid@Example.COM " });
 
         expect(response).toMatchObject({
             allowed: true,
-            credits: 3,
             isProUser: false,
+            accessExpiresAt: "2026-02-01T00:00:00.000Z",
             syncIntervalMs: 60000,
         });
         expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -109,8 +109,8 @@ describe("shared payment gate", () => {
 
     it("builds hosted checkout page URLs for both plans", () => {
         loadPaymentModules();
-        expect(globalThis.AMZ_LICENSE_API.checkoutPageUrl({ purchaseType: "credits" })).toBe(
-            "https://getslotnow.com/extension-usage-tracker/checkout/amazon-warehouse-jobs-uk?plan=credits"
+        expect(globalThis.AMZ_LICENSE_API.checkoutPageUrl({ purchaseType: "access" })).toBe(
+            "https://getslotnow.com/extension-usage-tracker/checkout/amazon-warehouse-jobs-uk?plan=access"
         );
         expect(globalThis.AMZ_LICENSE_API.checkoutPageUrl({ purchaseType: "pro" })).toBe(
             "https://getslotnow.com/extension-usage-tracker/checkout/amazon-warehouse-jobs-uk?plan=pro"
@@ -123,7 +123,7 @@ describe("shared payment gate", () => {
             licenseBuyerEmail: "buyer@example.com",
             licenseAmazonEmail: "paid@example.com",
         }), globalThis.AMZ_CONSTANTS);
-        mockFetchJson({ allowed: true, credits: 0, isProUser: true, syncIntervalMs: 60000 });
+        mockFetchJson({ allowed: true, isProUser: true, syncIntervalMs: 60000 });
 
         const state = await globalThis.AMZ_LICENSE_STATE.refresh({ amazonEmailId: "paid@example.com" });
 
@@ -141,7 +141,6 @@ describe("shared payment gate", () => {
             licenseAmazonEmail: "paid@example.com",
             licenseState: {
                 allowed: true,
-                credits: 0,
                 isProUser: true,
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",
@@ -154,12 +153,12 @@ describe("shared payment gate", () => {
         expect(await globalThis.AMZ_LICENSE_STATE.isAllowed()).toBe(false);
     });
 
-    it("denies booking on no-credit responses without disabling free job search", async () => {
+    it("denies booking on inactive paid-access responses without disabling free job search", async () => {
         const { STORAGE_KEYS } = (loadPaymentModules({
             licenseAmazonEmail: "empty@example.com",
             __ap: true,
         }), globalThis.AMZ_CONSTANTS);
-        mockFetchJson({ allowed: false, credits: 0, isProUser: false, message: "No credits" });
+        mockFetchJson({ allowed: false, isProUser: false, message: "No active paid access" });
 
         const denied = await globalThis.AMZ_LICENSE_STATE.refresh({ amazonEmailId: "empty@example.com" });
 
@@ -169,13 +168,12 @@ describe("shared payment gate", () => {
         );
     });
 
-    it("allows pro users without consuming credits", async () => {
+    it("allows pro users without recording usage through the backend", async () => {
         loadPaymentModules({
             licenseBuyerEmail: "buyer@example.com",
             licenseAmazonEmail: "pro@example.com",
             licenseState: {
                 allowed: true,
-                credits: 0,
                 isProUser: true,
                 emailId: "buyer@example.com",
                 amazonEmailId: "pro@example.com",
@@ -185,7 +183,7 @@ describe("shared payment gate", () => {
         });
         globalThis.fetch = vi.fn();
 
-        const result = await globalThis.AMZ_PAYMENT_GATE.consumeBookingCredit({ jobId: "JOB-1", scheduleId: "SCH-1" });
+        const result = await globalThis.AMZ_PAYMENT_GATE.recordBookingUsage({ jobId: "JOB-1", scheduleId: "SCH-1" });
 
         expect(result.ok).toBe(true);
         expect(result.skipped).toBe("pro-user");
@@ -198,7 +196,6 @@ describe("shared payment gate", () => {
             licenseAmazonEmail: "paid@example.com",
             licenseState: {
                 allowed: true,
-                credits: 0,
                 isProUser: true,
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",
@@ -209,12 +206,12 @@ describe("shared payment gate", () => {
         });
         globalThis.fetch = vi.fn();
 
-        const first = await globalThis.AMZ_PAYMENT_GATE.consumeBookingCredit({ jobId: "JOB-1", scheduleId: "SCH-1" });
-        const second = await globalThis.AMZ_PAYMENT_GATE.consumeBookingCredit({ jobId: "JOB-1", scheduleId: "SCH-1" });
+        const first = await globalThis.AMZ_PAYMENT_GATE.recordBookingUsage({ jobId: "JOB-1", scheduleId: "SCH-1" });
+        const second = await globalThis.AMZ_PAYMENT_GATE.recordBookingUsage({ jobId: "JOB-1", scheduleId: "SCH-1" });
 
         expect(first.ok).toBe(true);
         expect(first.skipped).toBe("pro-user");
-        expect(second.skipped).toBe("already-consumed");
+        expect(second.skipped).toBe("already-recorded");
         expect(globalThis.fetch).not.toHaveBeenCalled();
         expect(Object.keys(store.licenseUsageKeys)).toEqual([
             "amazon-warehouse-jobs-uk:paid@example.com:JOB-1:SCH-1",
