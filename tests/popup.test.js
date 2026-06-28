@@ -248,7 +248,15 @@ describe("local-only popup", () => {
         const store = await loadPopup();
         const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
         const openSpy = vi.spyOn(globalThis.window, "open").mockImplementation(() => null);
-        globalThis.fetch = vi.fn();
+        globalThis.fetch = vi.fn(() => Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({
+                allowed: false,
+                isProUser: false,
+                checkoutUrl: "https://checkout.dodo/pro",
+            }),
+        }));
 
         expect(document.getElementById("checkout-buyer-email")).toBeNull();
         expect(document.getElementById("checkout-amazon-email")).toBeNull();
@@ -258,10 +266,13 @@ describe("local-only popup", () => {
 
         expect(store[STORAGE_KEYS.LICENSE_BUYER_EMAIL]).toBeUndefined();
         expect(store[STORAGE_KEYS.LICENSE_AMAZON_EMAIL]).toBeUndefined();
-        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+            "https://getslotnow.com/extension-usage-tracker/api/amazon-warehouse-jobs-uk/license/checkout",
+            expect.objectContaining({ method: "POST" })
+        );
         expect(openSpy).toHaveBeenNthCalledWith(
             1,
-            "https://getslotnow.com/extension-usage-tracker/checkout/amazon-warehouse-jobs-uk?plan=pro",
+            "https://checkout.dodo/pro",
             "_blank",
             "noopener,noreferrer"
         );
