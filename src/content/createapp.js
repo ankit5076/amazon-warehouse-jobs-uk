@@ -582,7 +582,7 @@
       return;
     }
 
-    root.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true }).then(result => {
+    root.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true, refresh: false }).then(result => {
       if (requestId !== enableRequestId) return;
       if (!result.ok) {
         enabled = false;

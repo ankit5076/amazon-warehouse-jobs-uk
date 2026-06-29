@@ -1,4 +1,4 @@
-/* Service worker event routing for local-only automation. */
+/* Service worker event routing for paid-access automation. */
 globalThis.AMZ_IS_SERVICE_WORKER = true;
 
 try {

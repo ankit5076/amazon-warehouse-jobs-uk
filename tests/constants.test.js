@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadSharedScripts, unloadSharedNamespaces } from "./_load.js";
 
-describe("AMZ_CONSTANTS local-only configuration", () => {
+describe("AMZ_CONSTANTS paid-access configuration", () => {
     beforeEach(() => {
         unloadSharedNamespaces(["AMZ_CONSTANTS"]);
         loadSharedScripts(["shared/constants.js"]);

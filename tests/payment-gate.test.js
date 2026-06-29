@@ -138,11 +138,12 @@ describe("shared payment gate", () => {
 
 
     it("caches valid paid license state until expiry", async () => {
+        const future = new Date(Date.now() + 86400000).toISOString();
         const { STORAGE_KEYS } = (loadPaymentModules({
             licenseBuyerEmail: "buyer@example.com",
             licenseAmazonEmail: "paid@example.com",
         }), globalThis.AMZ_CONSTANTS);
-        mockFetchJson({ allowed: true, isProUser: true, syncIntervalMs: 60000 });
+        mockFetchJson({ allowed: true, isProUser: true, accessExpiresAt: future, syncIntervalMs: 60000 });
 
         const state = await globalThis.AMZ_LICENSE_STATE.refresh({ amazonEmailId: "paid@example.com" });
 
@@ -188,6 +189,7 @@ describe("shared payment gate", () => {
     });
 
     it("allows pro users without recording usage through the backend", async () => {
+        const future = new Date(Date.now() + 86400000).toISOString();
         loadPaymentModules({
             licenseBuyerEmail: "buyer@example.com",
             licenseAmazonEmail: "pro@example.com",
@@ -197,6 +199,7 @@ describe("shared payment gate", () => {
                 emailId: "buyer@example.com",
                 amazonEmailId: "pro@example.com",
                 email: "pro@example.com",
+                accessExpiresAt: future,
                 expiresAt: Date.now() + 60000,
             },
         });
@@ -210,6 +213,7 @@ describe("shared payment gate", () => {
     });
 
     it("does not call usage for active unlimited paid access", async () => {
+        const future = new Date(Date.now() + 86400000).toISOString();
         const store = loadPaymentModules({
             licenseBuyerEmail: "buyer@example.com",
             licenseAmazonEmail: "paid@example.com",
@@ -219,6 +223,7 @@ describe("shared payment gate", () => {
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",
                 email: "paid@example.com",
+                accessExpiresAt: future,
                 expiresAt: Date.now() + 60000,
             },
             licenseUsageKeys: {},
@@ -235,5 +240,50 @@ describe("shared payment gate", () => {
         expect(Object.keys(store.licenseUsageKeys)).toEqual([
             "amazon-warehouse-jobs-uk:paid@example.com:JOB-1:SCH-1",
         ]);
+    });
+
+    it("uses cached access for booking gates without checking the backend", async () => {
+        const future = new Date(Date.now() + 86400000).toISOString();
+        loadPaymentModules({
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "paid@example.com",
+            licenseState: {
+                allowed: true,
+                isProUser: true,
+                emailId: "buyer@example.com",
+                amazonEmailId: "paid@example.com",
+                email: "paid@example.com",
+                accessExpiresAt: future,
+                expiresAt: Date.now() + 60000,
+            },
+        });
+        globalThis.fetch = vi.fn();
+
+        const result = await globalThis.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true, refresh: false });
+
+        expect(result.ok).toBe(true);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("blocks locally expired cached access without checking the backend", async () => {
+        loadPaymentModules({
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "paid@example.com",
+            licenseState: {
+                allowed: true,
+                isProUser: true,
+                emailId: "buyer@example.com",
+                amazonEmailId: "paid@example.com",
+                email: "paid@example.com",
+                accessExpiresAt: new Date(Date.now() - 86400000).toISOString(),
+                expiresAt: Date.now() - 1,
+            },
+        });
+        globalThis.fetch = vi.fn();
+
+        const result = await globalThis.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true, refresh: false });
+
+        expect(result.ok).toBe(false);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 });

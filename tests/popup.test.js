@@ -25,6 +25,7 @@ function installPopupDom() {
             <div class="toggle-section">
               <input id="activate" type="checkbox">
             </div>
+            <span id="access-status-pill"></span>
             <div class="access-actions">
               <button id="checkout_btn" data-plan="access" type="button">Get 30 days</button>
               <button id="checkout_pro_btn" data-plan="pro" type="button">Go Pro</button>
@@ -147,7 +148,7 @@ async function loadPopup(store = {}) {
     return activeStore;
 }
 
-describe("local-only popup", () => {
+describe("paid-access popup", () => {
     beforeEach(() => {
         unloadSharedNamespaces([
             "AMZ_CONSTANTS",
@@ -200,10 +201,11 @@ describe("local-only popup", () => {
         expect(html).not.toContain("shared/validation.js");
     });
 
-    it("requires local location scope but not payment before activation", async () => {
+    it("keeps activation enabled even before search scope or paid access", async () => {
         const store = await loadPopup();
 
-        expect(document.getElementById("activate").disabled).toBe(true);
+        expect(document.getElementById("activate").disabled).toBe(false);
+        expect(document.getElementById("access-status-pill").textContent).toBe("Access unknown");
 
         const input = document.getElementById("city-input");
         input.value = "London";
@@ -220,7 +222,11 @@ describe("local-only popup", () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
-            json: () => Promise.resolve({ allowed: true }),
+            json: () => Promise.resolve({
+                allowed: true,
+                isProUser: true,
+                accessExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+            }),
         });
         const store = await loadPopup({
             licenseBuyerEmail: "buyer@example.com",
@@ -232,6 +238,7 @@ describe("local-only popup", () => {
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",
                 email: "paid@example.com",
+                accessExpiresAt: new Date(Date.now() + 86400000).toISOString(),
                 expiresAt: Date.now() + 60000,
             },
         });
@@ -252,6 +259,69 @@ describe("local-only popup", () => {
             action: "activate",
             status: true,
         });
+    });
+
+    it("activates after denied license validation without disabling the toggle", async () => {
+        const store = await loadPopup({
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "unpaid@example.com",
+            licenseEmail: "unpaid@example.com",
+        });
+
+        expect(document.getElementById("activate").disabled).toBe(false);
+        expect(document.getElementById("access-status-pill").textContent).toBe("No active access");
+
+        const activate = document.getElementById("activate");
+        activate.checked = true;
+        activate.dispatchEvent(new window.Event("change"));
+        await flushPopup();
+
+        expect(store.__ap).toBe(true);
+    });
+
+    it("shows active access and manually refreshes the backend license", async () => {
+        const future = new Date(Date.now() + 86400000).toISOString();
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({
+                allowed: true,
+                isProUser: true,
+                accessExpiresAt: future,
+                message: "Access active",
+            }),
+        });
+
+        await loadPopup({
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "paid@example.com",
+            licenseEmail: "paid@example.com",
+        });
+        await flushPopup();
+
+        expect(document.getElementById("access-status-pill").textContent).toMatch(/Access active until/);
+        const initialChecks = globalThis.fetch.mock.calls.filter(call => String(call[0]).includes("/license/check")).length;
+
+        document.getElementById("refresh_info").dispatchEvent(
+            new window.Event("submit", { bubbles: true, cancelable: true })
+        );
+        await flushPopup();
+
+        const nextChecks = globalThis.fetch.mock.calls.filter(call => String(call[0]).includes("/license/check")).length;
+        expect(nextChecks).toBeGreaterThan(initialChecks);
+    });
+
+    it("shows check failed without disabling activation", async () => {
+        globalThis.fetch = vi.fn(() => Promise.reject(new Error("offline")));
+
+        await loadPopup({
+            licenseBuyerEmail: "buyer@example.com",
+            licenseAmazonEmail: "paid@example.com",
+            licenseEmail: "paid@example.com",
+        });
+
+        expect(document.getElementById("activate").disabled).toBe(false);
+        expect(document.getElementById("access-status-pill").textContent).toBe("Check failed");
     });
 
     it("opens hosted checkout pages without collecting emails in the popup", async () => {
@@ -307,6 +377,7 @@ describe("local-only popup", () => {
                 emailId: "buyer@example.com",
                 amazonEmailId: "paid@example.com",
                 email: "paid@example.com",
+                accessExpiresAt: new Date(Date.now() + 86400000).toISOString(),
                 expiresAt: Date.now() + 60000,
             },
         });
