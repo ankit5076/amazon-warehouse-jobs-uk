@@ -18,7 +18,9 @@
         "shared/utils/text.js",
         "shared/utils/storage.js",
         "shared/utils/url.js",
+        "shared/utils/access-api.js",
         "shared/utils/messaging.js",
+        "vendor/sweetalert.js",
         "content/utils/dom.js",
         "content/utils/alerts.js",
         "content/createapp.js"
@@ -45,6 +47,7 @@
         "shared/utils/intervals.js",
         "shared/utils/runtime-controls.js",
         "shared/utils/state-store.js",
+        "shared/utils/access-api.js",
         "shared/utils/messaging.js",
         "content/utils/auth-probe.js",
         "content/utils/page-refresh.js",
@@ -71,7 +74,8 @@
   "host_permissions": [
     "https://www.jobsatamazon.co.uk/*",
     "https://jobsatamazon.co.uk/*",
-    "*://auth.hiring.amazon.com/*"
+    "*://auth.hiring.amazon.com/*",
+    "https://getslotnow.com/*"
   ],
   "icons": {
     "16": "assets/images/uk-flag.png",
@@ -106,6 +110,7 @@
         "shared/utils/text.js",
         "shared/utils/storage.js",
         "shared/utils/url.js",
+        "shared/utils/access-api.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
         "shared/utils/runtime-controls.js",

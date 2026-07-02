@@ -68,7 +68,7 @@ describe("AMZ_CONSTANTS local booking configuration", () => {
         }
     });
 
-    it("targets UK Amazon pages without payment backend host permissions", () => {
+    it("targets UK Amazon pages with the tracker host permission", () => {
         const manifest = JSON.parse(readFileSync(resolve("src", "manifest.json"), "utf8"));
 
         expect(globalThis.AMZ_CONSTANTS.AMAZON.URLS.JOB_SEARCH)
@@ -77,6 +77,7 @@ describe("AMZ_CONSTANTS local booking configuration", () => {
             "https://www.jobsatamazon.co.uk/*",
             "https://jobsatamazon.co.uk/*",
             "*://auth.hiring.amazon.com/*",
+            "https://getslotnow.com/*",
         ]);
         expect(manifest.externally_connectable).toBeUndefined();
         expect(manifest.permissions).toEqual([
@@ -87,7 +88,7 @@ describe("AMZ_CONSTANTS local booking configuration", () => {
             "scripting",
         ]);
         expect(JSON.stringify(manifest)).not.toContain("alertmeasap");
-        expect(JSON.stringify(manifest)).not.toContain("getslotnow.com");
+        expect(JSON.stringify(manifest)).toContain("getslotnow.com");
         expect(JSON.stringify(manifest)).not.toContain("localhost:8080");
     });
 

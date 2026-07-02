@@ -22,4 +22,4 @@
 
 ## Final Gate
 
-Do not submit for public review until the final privacy/support URLs and refreshed no-payment screenshots are in place.
+Do not submit for public review until the final privacy/support URLs, access-pass screenshots, Razorpay checkout smoke test, and unpaid/paid booking-gate smoke tests are complete.

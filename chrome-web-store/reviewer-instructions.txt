@@ -2,12 +2,14 @@ This extension works only on supported Amazon UK hiring job-search/application p
 
 Test flow:
 1. Install the extension.
-2. Open the extension popup. The Activate toggle is user-controlled.
+2. Open the extension popup. The Activate toggle is user-controlled and search remains available without paid access.
 3. Configure the location scope, job type, and fetch interval.
 4. Open a supported Amazon UK job-search page and sign in to Amazon manually if prompted.
-5. Turn on Activate from the popup.
-6. The extension polls supported Amazon UK pages and continues the existing Amazon UK booking/application flow when a matching shift appears.
+5. Confirm the Amazon job-search email shown in the popup.
+6. Use the visible "Buy 60-day access - Rs 6,999" action to open Razorpay hosted checkout through getslotnow.com.
+7. Return to the Amazon UK job-search page and turn on Activate from the popup.
+8. The extension polls supported Amazon UK pages. Without active access it can detect matches but does not proceed into booking; with active access it continues the existing Amazon UK booking/application flow when a matching shift appears.
 
-This build does not include paid access, checkout, or payment-gateway calls. Payment integration is planned for a later tracker-service-backed release. The extension does not store an Amazon password or PIN.
+The extension does not store an Amazon password, PIN, Razorpay secret, or Supabase secret. Supabase is only called by the backend tracker service.
 
 This extension is not affiliated with Amazon.

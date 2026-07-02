@@ -3,7 +3,7 @@ import { JSDOM } from "jsdom";
 import { loadSharedScripts, unloadSharedNamespaces } from "./_load.js";
 
 async function tick() {
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 30; index += 1) {
         await Promise.resolve();
     }
 }
@@ -15,7 +15,7 @@ function getParamFromUrl(url, key) {
 }
 
 function setupCreateAppHarness(options = {}) {
-    unloadSharedNamespaces(["AMZ_CONSTANTS", "__amazonCreateAppAutomation"]);
+    unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_ACCESS", "__amazonCreateAppAutomation"]);
     loadSharedScripts(["shared/constants.js"]);
 
     const dom = new JSDOM(
@@ -80,6 +80,23 @@ function setupCreateAppHarness(options = {}) {
         }),
         setLocal: vi.fn(async () => {}),
     };
+    const accessResponse = options.hasAccess === false
+        ? {
+            allowed: false,
+            amazonEmailId: "candidate@example.com",
+            message: "No active paid access.",
+        }
+        : {
+            allowed: true,
+            amazonEmailId: "candidate@example.com",
+            accessExpiresAt: "2099-01-01T00:00:00.000Z",
+            syncIntervalMs: 900000,
+        };
+    globalThis.AMZ_ACCESS = {
+        ensureFreshAccess: vi.fn(async () => accessResponse),
+        recordBookingUsage: vi.fn(async () => accessResponse),
+        showAccessRequiredPrompt: vi.fn(async () => ({ shown: true })),
+    };
     return { clickElement, dom };
 }
 
@@ -102,7 +119,8 @@ describe("Create Application automation", () => {
         delete globalThis.AMZ_DOM;
         delete globalThis.AMZ_URL;
         delete globalThis.AMZ_STORAGE;
-        unloadSharedNamespaces(["AMZ_CONSTANTS", "__amazonCreateAppAutomation"]);
+        delete globalThis.AMZ_ACCESS;
+        unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_ACCESS", "__amazonCreateAppAutomation"]);
     });
 
     it("clicks the official pre-consent Next and consent Start Application steps once", async () => {
@@ -131,12 +149,14 @@ describe("Create Application automation", () => {
             expect(clickElement.mock.calls.map(call => call[1])).toEqual(["next"]);
 
             vi.advanceTimersByTime(rescanDelayMs);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "next",
                 "start application",
             ]);
 
             vi.advanceTimersByTime(rescanDelayMs * 2);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "next",
                 "start application",
@@ -179,6 +199,7 @@ describe("Create Application automation", () => {
                 .querySelector('[aria-labelledby="existing-application-title"]')
                 .remove();
             vi.advanceTimersByTime(rescanDelayMs);
+            await tick();
 
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "active application continue",
@@ -232,12 +253,14 @@ describe("Create Application automation", () => {
             expect(clickElement.mock.calls[0][0].classList.contains("scheduleCardContainer")).toBe(true);
 
             vi.advanceTimersByTime(rescanDelayMs);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "job opportunity",
                 "select this job",
             ]);
 
             vi.advanceTimersByTime(rescanDelayMs);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "job opportunity",
                 "select this job",
@@ -273,6 +296,7 @@ describe("Create Application automation", () => {
 
             expect(clickElement.mock.calls.map(call => call[1])).toEqual(["accept offer"]);
             vi.advanceTimersByTime(retryDelayMs);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "accept offer",
                 "accept offer",
@@ -281,6 +305,7 @@ describe("Create Application automation", () => {
                 targetSelf: true,
             });
             vi.advanceTimersByTime(retryDelayMs * 2);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "accept offer",
                 "accept offer",
@@ -307,6 +332,7 @@ describe("Create Application automation", () => {
             ]);
 
             vi.advanceTimersByTime(rescanDelayMs * 3);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "submit shift preferences",
             ]);
@@ -330,6 +356,7 @@ describe("Create Application automation", () => {
             expect(clickElement.mock.calls.map(call => call[1])).toEqual(["start assessment"]);
 
             vi.advanceTimersByTime(rescanDelayMs * 3);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual(["start assessment"]);
         } finally {
             vi.useRealTimers();
@@ -348,6 +375,7 @@ describe("Create Application automation", () => {
             loadCreateAppScripts();
             await tick();
             vi.advanceTimersByTime(rescanDelayMs * 4);
+            await tick();
 
             expect(clickElement).not.toHaveBeenCalled();
         } finally {
@@ -369,7 +397,28 @@ describe("Create Application automation", () => {
             expect(clickElement.mock.calls.map(call => call[1])).toEqual(["continue"]);
 
             vi.advanceTimersByTime(rescanDelayMs * 4);
+            await tick();
             expect(clickElement.mock.calls.map(call => call[1])).toEqual(["continue"]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("does not click native application controls without active access", async () => {
+        vi.useFakeTimers();
+        try {
+            const { clickElement } = setupCreateAppHarness({
+                hasAccess: false,
+                html: '<button type="button"><div>Next</div></button>',
+            });
+
+            loadCreateAppScripts();
+            await tick();
+            vi.advanceTimersByTime(globalThis.AMZ_CONSTANTS.CREATE_APPLICATION.POST_CLICK_RESCAN_MS * 3);
+            await tick();
+
+            expect(clickElement).not.toHaveBeenCalled();
+            expect(globalThis.AMZ_ACCESS.showAccessRequiredPrompt).toHaveBeenCalled();
         } finally {
             vi.useRealTimers();
         }

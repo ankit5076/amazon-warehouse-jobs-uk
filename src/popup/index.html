@@ -7,6 +7,7 @@
     <script src="../shared/constants.js"></script>
     <script src="../shared/utils/text.js"></script>
     <script src="../shared/utils/storage.js"></script>
+    <script src="../shared/utils/access-api.js"></script>
     <script src="../shared/utils/city-tags.js"></script>
     <script src="../shared/utils/intervals.js"></script>
     <script src="../shared/utils/runtime-controls.js"></script>
@@ -41,6 +42,14 @@
 	                </div>
 	            </div>
 	        </div>
+        <div class="access-panel">
+            <div class="access-summary">
+                <span class="access-label">60-day access pass</span>
+                <strong id="access-status">Checking access</strong>
+                <span id="access-detail">Search is available while booking access is checked.</span>
+            </div>
+            <button id="buy-access" type="button" class="button buy-access">Buy 60-day access - Rs 6,999</button>
+        </div>
         <div class="dashboard">
             <div class="dropdowns-container" data-authenticated-section>
                 <label class="field field-full city-field" for="city">

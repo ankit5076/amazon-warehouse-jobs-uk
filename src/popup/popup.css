@@ -180,6 +180,91 @@ h1 #version {
     white-space: nowrap;
 }
 
+.access-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: #f7fafc;
+    border-bottom: 1px solid var(--border);
+}
+
+.access-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.access-label {
+    color: var(--amz-navy-3);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.35px;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+#access-status {
+    color: var(--amz-navy);
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+#access-detail {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.access-panel.access-active {
+    background: #f0fbf6;
+}
+
+.access-panel.access-active #access-status {
+    color: var(--success);
+}
+
+.access-panel.access-denied #access-status,
+.access-panel.access-error #access-status {
+    color: var(--danger);
+}
+
+.access-panel.access-checking #access-status {
+    color: var(--amz-blue-link);
+}
+
+.button.buy-access {
+    width: auto;
+    min-width: 208px;
+    margin: 0;
+    padding: 8px 12px;
+    background: var(--amz-orange);
+    color: #111827;
+    border: 1px solid var(--amz-orange-dark);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.15;
+    white-space: nowrap;
+    box-shadow: var(--shadow-sm);
+}
+
+.button.buy-access:hover {
+    background: var(--amz-orange-dark);
+    color: #111827;
+}
+
+.button.buy-access:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .logo {
     height: 30px;
 }

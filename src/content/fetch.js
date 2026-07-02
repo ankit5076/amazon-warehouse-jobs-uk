@@ -17,6 +17,7 @@
   const cityTagsUtil = root.AMZ_CITY_TAGS;
   const jobMatcher = root.AMZ_JOB_MATCH;
   const toasts = root.AMZ_TOASTS;
+  const access = root.AMZ_ACCESS;
   const dom = root.AMZ_DOM;
   const log = (...args) => console.log(...args);
   log.event = log;
@@ -52,6 +53,7 @@
   const scheduleAutomation = root.AMZ_SCHEDULE_AUTOMATION.create({
     isActive: () => pollerState.isActive,
     onNoApplyPath: handleNoApplyPath,
+    beforeBookingAction: recordBookingUsageBeforeClick,
   });
   let noApplyJobSearchRedirectTimer = null;
   let noApplyScheduleRecoveryInProgress = false;
@@ -308,6 +310,82 @@
     window.location.href = jobDetailUrl;
   }
 
+  async function notifyAccessBlocked(result = {}, details = {}) {
+    const message = result.message ||
+      'Search can continue, but booking requires an active 60-day access pass.';
+    log.warn('booking step blocked by paid-access gate', {
+      ...details,
+      message,
+      accessSource: result.source || null,
+      accessExpiresAt: result.accessExpiresAt || null,
+    });
+    const promptResult = await access?.showAccessRequiredPrompt?.({
+      amazonEmailId: result.amazonEmailId,
+      message,
+    });
+    if (!promptResult?.shown) toasts.showAccessRequiredToast?.({ message });
+  }
+
+  async function ensureAccessForBooking(source, metadata = {}) {
+    if (!access?.ensureFreshAccess) {
+      await notifyAccessBlocked({
+        message: 'Paid-access validation is unavailable. Booking is locked.',
+      }, { source, ...metadata });
+      return false;
+    }
+
+    const result = await access.ensureFreshAccess({
+      source,
+      metadata,
+    });
+    if (result.allowed === true) return true;
+    await notifyAccessBlocked(result, { source, ...metadata });
+    return false;
+  }
+
+  async function getLastSelectedSchedule() {
+    try {
+      const stored = await root.AMZ_STORAGE.getLocal(STORAGE_KEYS.LAST_SELECTED_SCHEDULE);
+      return stored[STORAGE_KEYS.LAST_SELECTED_SCHEDULE] || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function recordBookingUsageBeforeClick(details = {}) {
+    if (!access?.recordBookingUsage) {
+      await notifyAccessBlocked({
+        message: 'Paid-access validation is unavailable. Booking is locked.',
+      }, details);
+      return false;
+    }
+
+    const lastSchedule = await getLastSelectedSchedule();
+    const jobId = details.jobId || root.AMZ_URL.getJobIdFromUrl();
+    const scheduleId = details.scheduleId ||
+      lastSchedule?.scheduleId ||
+      root.AMZ_URL.getScheduleIdFromUrl?.() ||
+      null;
+    const result = await access.recordBookingUsage({
+      source: details.source || 'schedule-apply',
+      jobId,
+      scheduleId,
+      metadata: {
+        label: details.label || null,
+        buttonText: details.buttonText || null,
+        buttonAriaLabel: details.buttonAriaLabel || null,
+        pageUrl: details.pageUrl || window.location.href,
+      },
+    });
+    if (result.allowed === true) return true;
+    await notifyAccessBlocked(result, {
+      source: details.source || 'schedule-apply',
+      jobId,
+      scheduleId,
+    });
+    return false;
+  }
+
   function clearNoApplyJobSearchRedirect() {
     if (!noApplyJobSearchRedirectTimer) return;
     clearTimeout(noApplyJobSearchRedirectTimer);
@@ -453,6 +531,14 @@
     }
 
     persistRecoveredSchedule(selectedSchedule, { ...details, jobId });
+    if (!await ensureAccessForBooking('schedule-graphql-recovery', {
+      ...details,
+      jobId,
+      scheduleId,
+      scheduleCount: scheduleCards.length,
+    })) {
+      return 'access-denied';
+    }
     log.info('schedule GraphQL recovery found schedule; routing to native application flow', {
       jobId,
       scheduleId,
@@ -513,6 +599,7 @@
 
     if (!pollerState.isActive || !root.AMZ_URL.isJobDetailPage()) return;
     if (recovery === 'routed' || recovery === 'auth-handled') return;
+    if (recovery === 'access-denied') return;
 
     scheduleReturnToJobSearchAfterNoApply(details, {
       markUnavailable: recovery === 'unavailable' || recovery === 'disabled',
@@ -720,6 +807,13 @@
       log.error('Unable to persist last matched job metadata:', error);
     });
     if (jobDetailUrl) {
+      if (!await ensureAccessForBooking('matched-job-navigation', {
+        jobId: matchedJob.jobId,
+        matchedLocation,
+        selectedCity: pollerState.selectedCity || null,
+      })) {
+        return null;
+      }
       log.info('opening matched job detail and starting schedule automation', {
         jobDetailUrl,
         job: jobMatcher.summarizeJob(matchedJob),
@@ -878,6 +972,13 @@
     }
 
     if (root.AMZ_URL.isJobDetailPage() && pollerState.isActive) {
+      if (!await ensureAccessForBooking('job-detail-schedule-automation', {
+        jobId: root.AMZ_URL.getJobIdFromUrl(),
+        pageUrl: window.location.href,
+      })) {
+        scheduleAutomation.stop();
+        return;
+      }
       log.debug('job detail page active; starting schedule automation');
       scheduleAutomation.start();
     }

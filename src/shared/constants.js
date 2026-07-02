@@ -31,6 +31,7 @@
     PAGE_REFRESH_JOB_SEARCH_INTERVAL_MS: 'pageRefreshJobSearchIntervalMs',
     LAST_MATCHED_JOB: 'lastMatchedJob',
     LAST_SELECTED_SCHEDULE: 'lastSelectedSchedule',
+    PAID_ACCESS_CACHE: '__amz_paid_access_cache',
     DETECTED_EMAILS: 'detectedEmails',
     AUTH_PROBE_STATUS: 'authProbeStatus',
     AUTH_PROBE_UPDATED_AT: 'authProbeUpdatedAt',
@@ -389,6 +390,15 @@
     PRODUCT_ID: 'amazon-warehouse-jobs-uk',
     PRODUCT_NAME: 'Amazon Warehouse Jobs UK',
     COUNTRY: 'United Kingdom',
+    TRACKER_BASE_URL: 'https://getslotnow.com/extension-usage-tracker',
+    ACCESS_PASS: Object.freeze({
+      PURCHASE_TYPE: 'access',
+      DAYS: 60,
+      PRICE_LABEL: 'Rs 6,999',
+      BUY_LABEL: 'Buy 60-day access - Rs 6,999',
+      STATUS_LABEL: '60-day access pass',
+      UNLIMITED_BOOKINGS_LABEL: 'Unlimited bookings',
+    }),
     FALLBACK_DEFAULTS: LOCAL_RUNTIME_DEFAULTS,
   });
 
@@ -643,6 +653,7 @@
       'shared/utils/text.js',
       'shared/utils/url.js',
       'shared/utils/storage.js',
+      'shared/utils/access-api.js',
       'shared/utils/messaging.js',
       'content/utils/dom.js',
       'content/utils/alerts.js',

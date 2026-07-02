@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } = globalThis.AMZ_CONSTANTS;
   const state = globalThis.AMZ_STATE;
   const storage = globalThis.AMZ_STORAGE;
+  const access = globalThis.AMZ_ACCESS;
   const account = globalThis.AMZ_ACCOUNT;
   const runtimeControlUtils = globalThis.AMZ_RUNTIME_CONTROLS;
   const log = (...args) => console.log(...args);
@@ -37,6 +38,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     intervalValue: document.getElementById('fetch_interval_value'),
     intervalUnit: document.getElementById('fetch_interval_unit'),
     amazonEmailDisplay: document.getElementById('amazon-email-display'),
+    accessPanel: document.querySelector('.access-panel'),
+    accessStatus: document.getElementById('access-status'),
+    accessDetail: document.getElementById('access-detail'),
+    buyAccessButton: document.getElementById('buy-access'),
     authenticatedSections: Array.from(document.querySelectorAll('[data-authenticated-section]')),
     addAllCitiesButton: document.getElementById('add-all-cities'),
     cityScopeStatus: document.getElementById('city-scope-status'),
@@ -60,8 +65,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  function setAccessUiState(stateName, status, detail) {
+    if (elements.accessPanel) {
+      elements.accessPanel.classList.remove('access-active', 'access-denied', 'access-error', 'access-checking');
+      if (stateName) elements.accessPanel.classList.add('access-' + stateName);
+    }
+    if (elements.accessStatus) elements.accessStatus.textContent = status || '';
+    if (elements.accessDetail) elements.accessDetail.textContent = detail || '';
+  }
+
+  function setBuyAccessBusy(busy) {
+    if (!elements.buyAccessButton) return;
+    elements.buyAccessButton.disabled = busy === true;
+    elements.buyAccessButton.textContent = busy === true
+      ? 'Opening checkout...'
+      : (BACKEND.ACCESS_PASS?.BUY_LABEL || 'Buy access');
+  }
+
+  function renderAccessStatus(snapshot, email) {
+    if (!email) {
+      setAccessUiState(
+        'denied',
+        'Amazon email not detected',
+        'Search can run after Amazon sign-in; booking unlocks after purchase.'
+      );
+      return;
+    }
+    if (!snapshot) {
+      setAccessUiState('checking', 'Checking access', 'Search remains available while booking access is checked.');
+      return;
+    }
+    if (snapshot.allowed === true) {
+      const expiry = access?.formatAccessExpiry?.(snapshot) || '';
+      setAccessUiState(
+        'active',
+        'Access active',
+        expiry
+          ? 'Valid until ' + expiry + '. Unlimited bookings enabled.'
+          : 'Unlimited bookings enabled.'
+      );
+      return;
+    }
+    setAccessUiState(
+      snapshot.source === 'network-error' || snapshot.source === 'usage-error' ? 'error' : 'denied',
+      'Booking locked',
+      snapshot.message || 'Buy access to continue from search into booking.'
+    );
+  }
+
   function currentAmazonEmail() {
     return normalizeEmail(elements.amazonEmailDisplay?.dataset?.email || '');
+  }
+
+  async function refreshAccessStatus(options = {}) {
+    const email = currentAmazonEmail() || await getStoredAmazonEmail();
+    renderAccessStatus(null, email);
+    if (!email || !access?.checkAccess) return null;
+    const snapshot = await access.checkAccess(email, { force: options.force === true });
+    renderAccessStatus(snapshot, email);
+    return snapshot;
   }
 
   function sameEmail(left, right) {
@@ -439,6 +501,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.activate.disabled = false;
       elements.activate.title = '';
     }
+    await refreshAccessStatus();
   }
 
   async function notifyActiveTab(active) {
@@ -591,6 +654,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     await state.setJobType(jobTypes);
   });
 
+  elements.buyAccessButton?.addEventListener('click', async () => {
+    const email = currentAmazonEmail() || await getStoredAmazonEmail();
+    if (!email) {
+      renderAccessStatus({
+        allowed: false,
+        message: 'Open Amazon Jobs while signed in so the extension can detect your Amazon email.',
+      }, '');
+      return;
+    }
+
+    setBuyAccessBusy(true);
+    try {
+      const checkout = await access.createCheckout(email);
+      if (!checkout.checkoutUrl) throw new Error('Checkout URL was not returned.');
+      if (typeof globalThis.chrome?.tabs?.create === 'function') {
+        await globalThis.chrome.tabs.create({ url: checkout.checkoutUrl });
+      } else {
+        window.open(checkout.checkoutUrl, '_blank', 'noopener');
+      }
+      renderAccessStatus(checkout, email);
+    } catch (error) {
+      renderAccessStatus({
+        allowed: false,
+        source: 'error',
+        message: error?.message || String(error),
+      }, email);
+    } finally {
+      setBuyAccessBusy(false);
+    }
+  });
+
   elements.activate?.addEventListener('change', async event => {
     if (!event.target.checked) {
       const active = await state.setActive(false);
@@ -610,6 +704,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.refreshButton.innerText = 'Refreshing...';
     try {
       await syncRuntimeControlsToStorage();
+      await refreshAccessStatus({ force: true });
       elements.refreshButton.classList.add('btn-success');
       elements.refreshButton.innerText = 'Success';
       await new Promise(resolve => setTimeout(resolve, POPUP.REFRESH_SUCCESS_DELAY_MS));

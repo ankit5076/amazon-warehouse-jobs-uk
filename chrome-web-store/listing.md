@@ -31,7 +31,9 @@ Key behavior:
 - Runs on supported UK Amazon hiring pages.
 - Lets the user configure location, job type, interval, and booking preferences.
 - Checks the Amazon session before polling and redirects to Amazon login when needed.
-- Continues the matched-job booking/application transition without a payment gate in this test build.
+- Lets users search and detect matching jobs without paid access.
+- Requires the 60-day access pass before navigating into booking or clicking Amazon application controls.
+- Offers one Razorpay-hosted access pass: Rs 6,999 for 60 days with unlimited bookings while active.
 
 This extension is not affiliated with Amazon.
 ```

@@ -18,7 +18,7 @@
   log.debug = (...args) => console.debug(...args);
   log.trace = (...args) => console.debug(...args);
 
-  function create({ isActive, onNoApplyPath } = {}) {
+  function create({ isActive, onNoApplyPath, beforeBookingAction } = {}) {
     let cleanupCurrent = null;
 
     function active() {
@@ -161,6 +161,7 @@
       let attemptQueued = false;
       let queuedAttemptSequence = 0;
       let activeQueuedAttemptId = 0;
+      let bookingGateInFlight = false;
       const startedAt = Date.now();
       let selectScheduleClickedAt = null;
       let scheduleLabelClickedAt = null;
@@ -242,7 +243,7 @@
         });
       };
 
-      const clickApplyButtonWithVerification = (button, source, label) => {
+      const performApplyClick = (button, source, label) => {
         clearPostSelectOptionsTimer();
         clearPostLabelApplyTimer();
         const scheduleDetails = getScheduleCardDetails(button);
@@ -264,6 +265,37 @@
 
         finished = true;
         cleanup();
+        return true;
+      };
+
+      const clickApplyButtonWithVerification = (button, source, label) => {
+        if (typeof beforeBookingAction !== 'function') {
+          return performApplyClick(button, source, label);
+        }
+        if (bookingGateInFlight) return true;
+        bookingGateInFlight = true;
+        Promise.resolve(beforeBookingAction({
+          source,
+          label,
+          ...getScheduleCardDetails(button),
+        })).then(allowed => {
+          if (allowed !== true) {
+            log.warn(label + ' blocked by paid-access gate', {
+              source,
+              jobId: urls.getJobIdFromUrl(),
+              pageUrl: urls.currentUrl(),
+            });
+            cleanup();
+            return;
+          }
+          if (!active() || finished) return;
+          performApplyClick(button, source, label);
+        }).catch(error => {
+          log.error(label + ' paid-access gate failed:', error);
+          cleanup();
+        }).finally(() => {
+          bookingGateInFlight = false;
+        });
         return true;
       };
 

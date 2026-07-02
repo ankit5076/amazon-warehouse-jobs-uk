@@ -230,6 +230,21 @@
     });
   }
 
+  function showAccessRequiredToast(details = {}) {
+    const message = details.message ||
+      'Search can continue, but booking requires an active 60-day access pass.';
+    Swal.fire({
+      title: 'Access required for booking',
+      html: '<span style="font-size:0.92em;">' + text.escapeHtml(message) + '</span>',
+      icon: 'warning',
+      timer: 12000,
+      timerProgressBar: true,
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+    });
+  }
+
   function closePollingToast() {
     const existingToast = document.querySelector('.swal2-toast.amazon-polling-toast');
     if (existingToast && Swal.isVisible()) Swal.close();
@@ -240,6 +255,7 @@
     showJobsReceivedToast,
     showJobFoundToast,
     showBookingConfirmedToast,
+    showAccessRequiredToast,
     closePollingToast,
   });
 })(typeof globalThis !== 'undefined' ? globalThis : self);

@@ -3,12 +3,13 @@
   'use strict';
 
   if (root.__amazonCreateAppAutomation?.initialized) {
-    root.__amazonCreateAppAutomation.setEnabled(true);
+    await root.__amazonCreateAppAutomation.setEnabled(true);
     return;
   }
 
   const { CREATE_APPLICATION, SELECTORS } = root.AMZ_CONSTANTS;
   const dom = root.AMZ_DOM;
+  const access = root.AMZ_ACCESS;
   function writeLog(level, ...args) {
     if (!enabled && ['debug', 'trace'].includes(level)) return;
     const method = level === 'trace' ? 'debug' : level;
@@ -36,6 +37,11 @@
     retried: false,
     confirmed: false,
   };
+  const USAGE_AUDIT_LABELS = new Set([
+    'accept offer',
+    'submit shift preferences',
+    'create application',
+  ]);
 
   function normalizeText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -56,6 +62,55 @@
       jobId: root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
       scheduleId: root.AMZ_URL.getScheduleIdFromUrl?.(pageUrl) || null,
     };
+  }
+
+  async function notifyAccessBlocked(result = {}, details = {}) {
+    const message = result.message ||
+      'Search can continue, but booking requires an active 60-day access pass.';
+    log.warn('native application automation blocked by paid-access gate', {
+      ...details,
+      message,
+      accessSource: result.source || null,
+      accessExpiresAt: result.accessExpiresAt || null,
+    });
+    await access?.showAccessRequiredPrompt?.({
+      amazonEmailId: result.amazonEmailId,
+      message,
+    });
+  }
+
+  async function ensureAccessForApplication(label, options = {}) {
+    if (!access?.ensureFreshAccess) {
+      await notifyAccessBlocked({
+        message: 'Paid-access validation is unavailable. Booking is locked.',
+      }, { label });
+      return false;
+    }
+
+    const context = getApplicationContext();
+    const metadata = {
+      label,
+      route: getApplicationHashRoute(),
+      pageUrl: window.location.href,
+      jobId: context.jobId || null,
+      scheduleId: context.scheduleId || null,
+      applicationId: context.applicationId || null,
+    };
+    const result = options.recordUsage === true && access.recordBookingUsage
+      ? await access.recordBookingUsage({
+          source: 'application:' + label,
+          jobId: context.jobId || null,
+          scheduleId: context.scheduleId || null,
+          metadata,
+        })
+      : await access.ensureFreshAccess({
+          source: 'application:' + label,
+          metadata,
+        });
+
+    if (result.allowed === true) return true;
+    await notifyAccessBlocked(result, metadata);
+    return false;
   }
 
   function routeSignature(pageUrl = window.location.href) {
@@ -185,7 +240,7 @@
     return [label, routeSignature(), buttonText].join('|');
   }
 
-  function clickButton(button, label, options = {}) {
+  async function clickButton(button, label, options = {}) {
     if (!enabled || !button || !dom.isClickable(button)) return false;
 
     const clickKey = options.key || buildClickKey(label, button);
@@ -197,6 +252,15 @@
     }
 
     clickedKeys.add(clickKey);
+    const hasAccess = await ensureAccessForApplication(label, {
+      recordUsage: USAGE_AUDIT_LABELS.has(label),
+    });
+    if (!hasAccess) {
+      clickedKeys.delete(clickKey);
+      cleanup();
+      return false;
+    }
+
     log.info(label + ' click requested', dom.describeButton(button));
     const clicked = dom.clickElement(button, label, options.clickOptions);
     if (!clicked) {
@@ -221,7 +285,7 @@
     });
   }
 
-  function handlePendingAcceptOffer() {
+  async function handlePendingAcceptOffer() {
     if (!acceptOfferState.clicked || acceptOfferState.confirmed) return false;
 
     const route = getApplicationHashRoute();
@@ -236,13 +300,15 @@
       elapsedMs >= CREATE_APPLICATION.ACCEPT_OFFER_RETRY_DELAY_MS
     ) {
       const button = findAcceptOfferButton();
-      if (clickButton(button, 'accept offer', {
+      acceptOfferState.retried = true;
+      if (await clickButton(button, 'accept offer', {
         key: buildClickKey('accept offer retry', button),
         retry: true,
         clickOptions: { targetSelf: true },
       })) {
-        acceptOfferState.retried = true;
         acceptOfferState.clickedAt = Date.now();
+      } else {
+        acceptOfferState.retried = false;
       }
       return true;
     }
@@ -262,7 +328,7 @@
     return false;
   }
 
-  function handleActiveApplicationModal() {
+  async function handleActiveApplicationModal() {
     const modal = findActiveApplicationModal();
     if (!modal) return false;
 
@@ -270,7 +336,7 @@
     log.debug('active application modal scan', {
       continueButton: dom.describeButton(button),
     });
-    if (clickButton(button, 'active application continue')) return true;
+    if (await clickButton(button, 'active application continue')) return true;
     scheduleScan('active-application-modal-wait', CREATE_APPLICATION.POST_CLICK_RESCAN_MS);
     return true;
   }
@@ -362,22 +428,22 @@
     return handlers;
   }
 
-  function runHandler(handler) {
+  async function runHandler(handler) {
     if (!handler) return false;
     const button = handler.find();
     if (!button) return false;
-    const clicked = clickButton(button, handler.label, {
+    const clicked = await clickButton(button, handler.label, {
       clickOptions: handler.clickOptions,
     });
     if (clicked) handler.afterClick?.();
     return clicked;
   }
 
-  function attemptAutomation(trigger = 'scan') {
+  async function attemptAutomation(trigger = 'scan') {
     if (!enabled) return;
 
-    if (handleActiveApplicationModal()) return;
-    if (handlePendingAcceptOffer()) return;
+    if (await handleActiveApplicationModal()) return;
+    if (await handlePendingAcceptOffer()) return;
 
     const route = getApplicationHashRoute();
     const routeHandler = routeHandlers.find(handler => handler.route === route);
@@ -391,7 +457,7 @@
       acceptOfferRetried: acceptOfferState.retried,
     });
 
-    if (routeButton && runHandler({
+    if (routeButton && await runHandler({
       ...routeHandler,
       find: () => routeButton,
     })) {
@@ -399,7 +465,7 @@
     }
 
     for (const handler of fallbackHandlersForRoute()) {
-      if (runHandler(handler)) return;
+      if (await runHandler(handler)) return;
     }
   }
 
@@ -409,7 +475,7 @@
 
     const run = () => {
       scanTimer = null;
-      attemptAutomation(reason);
+      void attemptAutomation(reason);
     };
 
     if (delayMs > 0) {
@@ -517,7 +583,7 @@
     acceptOfferState.confirmed = false;
   }
 
-  function setEnabled(nextEnabled) {
+  async function setEnabled(nextEnabled) {
     const requestId = ++enableRequestId;
     const wasEnabled = enabled;
     if (nextEnabled !== true) {
@@ -526,7 +592,13 @@
       return;
     }
 
+    const hasAccess = await ensureAccessForApplication('application enable');
     if (requestId !== enableRequestId) return;
+    if (!hasAccess) {
+      enabled = false;
+      cleanup();
+      return;
+    }
     enabled = true;
     if (!wasEnabled) resetRunState();
     ensureObserver();
@@ -544,7 +616,7 @@
         message?.action === root.AMZ_CONSTANTS.MESSAGE_ACTIONS.EXTENSION_STATE_CHANGED ||
         message?.action === root.AMZ_CONSTANTS.MESSAGE_ACTIONS.ACTIVATE
       ) {
-        setEnabled(message.status === true);
+        void setEnabled(message.status === true);
       }
     });
   }
@@ -552,5 +624,5 @@
   const storage = await root.AMZ_STORAGE.getLocal([
     root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE,
   ]);
-  setEnabled(storage[root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE] === true);
+  await setEnabled(storage[root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE] === true);
 })(typeof globalThis !== 'undefined' ? globalThis : self);
