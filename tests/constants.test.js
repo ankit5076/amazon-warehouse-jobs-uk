@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadSharedScripts, unloadSharedNamespaces } from "./_load.js";
 
-describe("AMZ_CONSTANTS paid-access configuration", () => {
+describe("AMZ_CONSTANTS local booking configuration", () => {
     beforeEach(() => {
         unloadSharedNamespaces(["AMZ_CONSTANTS"]);
         loadSharedScripts(["shared/constants.js"]);
@@ -19,12 +19,37 @@ describe("AMZ_CONSTANTS paid-access configuration", () => {
         expect(BACKEND.FALLBACK_DEFAULTS.jobSearch.fallbackDistanceKm).toBe(5);
         expect(BACKEND.FALLBACK_DEFAULTS.jobSearch.fetchTimeoutMs).toBe(15000);
         expect(BACKEND.FALLBACK_DEFAULTS.pageRefresh.jobSearchIntervalMs).toBe(120000);
-        expect(Object.keys(BACKEND.FALLBACK_DEFAULTS.cityCoordinates)).toHaveLength(66);
+        expect(Object.keys(BACKEND.FALLBACK_DEFAULTS.cityCoordinates)).toHaveLength(84);
         expect(BACKEND.FALLBACK_DEFAULTS.cityCoordinates.London).toEqual({
             lat: 51.507218,
             lng: -0.127586,
         });
+        expect(BACKEND.FALLBACK_DEFAULTS.cityCoordinates.Gateshead).toEqual({
+            lat: 54.962579,
+            lng: -1.601929,
+        });
+        expect(BACKEND.FALLBACK_DEFAULTS.defaultCityTags).toEqual(expect.arrayContaining([
+            "Baillieston",
+            "Basildon",
+            "Bathgate",
+            "Bognor Regis",
+            "Dundee",
+            "Garden City",
+            "Gateshead",
+            "Grays",
+            "Kegworth",
+            "Knowsley",
+            "Maidstone",
+            "North Ferriby",
+            "Norwich",
+            "Poole",
+            "Port Talbot",
+            "Preston",
+            "Rochdale",
+            "Worsley",
+        ]));
         expect(globalThis.AMZ_CONSTANTS.NOTIFICATIONS).toBeUndefined();
+        expect(globalThis.AMZ_CONSTANTS.PAYMENT_GATE).toBeUndefined();
         expect(globalThis.AMZ_CONSTANTS.MESSAGE_ACTIONS.BACKEND_REQUEST).toBeUndefined();
         expect(globalThis.AMZ_CONSTANTS.MESSAGE_ACTIONS.NOTIFICATION_EVENT).toBeUndefined();
     });
@@ -43,7 +68,7 @@ describe("AMZ_CONSTANTS paid-access configuration", () => {
         }
     });
 
-    it("targets UK Amazon pages with only Amazon and license API host permissions", () => {
+    it("targets UK Amazon pages without payment backend host permissions", () => {
         const manifest = JSON.parse(readFileSync(resolve("src", "manifest.json"), "utf8"));
 
         expect(globalThis.AMZ_CONSTANTS.AMAZON.URLS.JOB_SEARCH)
@@ -52,9 +77,17 @@ describe("AMZ_CONSTANTS paid-access configuration", () => {
             "https://www.jobsatamazon.co.uk/*",
             "https://jobsatamazon.co.uk/*",
             "*://auth.hiring.amazon.com/*",
-            "https://getslotnow.com/*",
+        ]);
+        expect(manifest.externally_connectable).toBeUndefined();
+        expect(manifest.permissions).toEqual([
+            "tabs",
+            "storage",
+            "cookies",
+            "declarativeContent",
+            "scripting",
         ]);
         expect(JSON.stringify(manifest)).not.toContain("alertmeasap");
+        expect(JSON.stringify(manifest)).not.toContain("getslotnow.com");
         expect(JSON.stringify(manifest)).not.toContain("localhost:8080");
     });
 

@@ -6,10 +6,14 @@
 
   const { AUTH_PROBE } = root.AMZ_CONSTANTS;
   const state = root.AMZ_STATE;
-  const log = root.AMZ_LOGGER.create('[amazon-shift][auth-probe]', {
-    workflow: 'auth-probe',
-    source: 'content/utils/auth-probe.js',
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
   let lastProbeSnapshot = Object.freeze({
     startedAt: 0,
     completedAt: 0,

@@ -17,23 +17,14 @@ function installPopupDom() {
         <html>
           <body>
             <span id="version"></span>
-            <select id="log_mode">
-              <option value="standard">Standard</option>
-              <option value="debug">Debug</option>
-              <option value="off">Off</option>
-            </select>
             <div class="toggle-section">
               <input id="activate" type="checkbox">
             </div>
-            <span id="access-status-pill"></span>
-            <div class="access-actions">
-              <button id="checkout_btn" data-plan="access" type="button">Get 30 days</button>
-              <button id="checkout_pro_btn" data-plan="pro" type="button">Go Pro</button>
-              <small id="license-status"></small>
-            </div>
+            <strong id="amazon-email-display"></strong>
             <div class="dropdowns-container" data-authenticated-section>
               <div class="field"><select id="city"></select></div>
               <div class="field"><select id="distance"></select></div>
+              <div id="job-type-options"></div>
               <select id="jobType" multiple></select>
               <input id="fetch_interval_value" type="number">
               <select id="fetch_interval_unit">
@@ -121,20 +112,16 @@ function useLocalStore(initial = {}) {
     return store;
 }
 
-async function loadPopup(store = {}) {
+async function loadPopup(store = {}, activeTab = { id: 12 }, sendMessageImpl) {
     installPopupDom();
     const activeStore = useLocalStore(store);
-    globalThis.chrome.tabs.query = vi.fn().mockResolvedValue([{ id: 12 }]);
-    globalThis.chrome.tabs.sendMessage = vi.fn();
+    globalThis.chrome.tabs.query = vi.fn().mockResolvedValue([activeTab]);
+    globalThis.chrome.tabs.sendMessage = vi.fn(sendMessageImpl);
     loadSharedScripts([
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
         "shared/utils/runtime-controls.js",
@@ -148,17 +135,13 @@ async function loadPopup(store = {}) {
     return activeStore;
 }
 
-describe("paid-access popup", () => {
+describe("local booking popup", () => {
     beforeEach(() => {
         unloadSharedNamespaces([
             "AMZ_CONSTANTS",
             "AMZ_TIME",
-            "AMZ_LOGGER",
             "AMZ_TEXT",
             "AMZ_STORAGE",
-            "AMZ_LICENSE_API",
-            "AMZ_LICENSE_STATE",
-            "AMZ_PAYMENT_GATE",
             "AMZ_CITY_TAGS",
             "AMZ_INTERVALS",
             "AMZ_RUNTIME_CONTROLS",
@@ -169,15 +152,7 @@ describe("paid-access popup", () => {
         delete globalThis.window;
         delete globalThis.document;
         delete globalThis.chrome;
-        globalThis.fetch = vi.fn(url =>
-            Promise.resolve({
-                ok: true,
-                status: 200,
-                json: () => Promise.resolve(String(url).includes("/license/plans")
-                    ? { plans: { access: true, pro: true } }
-                    : { allowed: false, isProUser: false }),
-            })
-        );
+        globalThis.fetch = vi.fn();
     });
 
     afterEach(() => {
@@ -185,27 +160,71 @@ describe("paid-access popup", () => {
         delete globalThis.fetch;
     });
 
-    it("shows booking controls first and keeps email fields out of the landing markup", () => {
+    it("shows booking controls without payment actions or backend scripts", () => {
         const html = readFileSync(resolve("src", "popup", "index.html"), "utf8");
-        expect(html).toContain("checkout_btn");
-        expect(html).toContain("checkout_pro_btn");
-        expect(html).toContain("$50");
-        expect(html).toContain("$120");
         expect(html).toContain("id=\"city\"");
         expect(html).toContain("id=\"distance\"");
+        expect(html).toContain("id=\"job-type-options\"");
+        expect(html).not.toContain("checkout_btn");
+        expect(html).not.toContain("checkout_pro_btn");
+        expect(html).not.toContain("$50");
+        expect(html).not.toContain("$120");
+        expect(html).not.toContain("license-status");
+        expect(html).not.toContain("access-status-pill");
         expect(html).not.toContain("buyer_email");
         expect(html).not.toContain("extension_username");
         expect(html).not.toContain("admin_login_btn");
         expect(html).not.toContain("fetch_clients_btn");
         expect(html).not.toContain("shared/api-client.js");
         expect(html).not.toContain("shared/validation.js");
+        expect(html).not.toContain("shared/utils/license-api.js");
+        expect(html).not.toContain("shared/utils/license-state.js");
+        expect(html).not.toContain("shared/utils/payment-gate.js");
     });
 
-    it("keeps activation enabled even before search scope or paid access", async () => {
+    it("renders City options and City Filters in alphabetical order", async () => {
+        const store = await loadPopup({
+            cityTags: ["London", "Edinburgh", "Barking"],
+        });
+
+        expect(Array.from(document.querySelectorAll("#city option"))
+            .slice(0, 5)
+            .map(option => option.textContent)).toEqual([
+                "All cities",
+                "Baillieston",
+                "Banbury",
+                "Barking",
+                "Barlborough",
+            ]);
+        expect(Array.from(document.querySelectorAll("#tag-input-box .tag"))
+            .map(tag => tag.dataset.tagValue)).toEqual([
+                "Barking",
+                "Edinburgh",
+                "London",
+            ]);
+        expect(store.cityTags).toEqual(["Barking", "Edinburgh", "London"]);
+    });
+
+    it("uses checkbox job type options instead of requiring ctrl-click multi-select", async () => {
+        const store = await loadPopup();
+        const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
+
+        const fullTime = document.querySelector('#job-type-options input[value="FULL_TIME"]');
+        expect(fullTime).toBeTruthy();
+        expect(fullTime.checked).toBe(false);
+
+        fullTime.click();
+        await flushPopup();
+
+        expect(store[STORAGE_KEYS.JOB_TYPE]).toEqual(["FULL_TIME"]);
+        expect(document.querySelector('.job-type-option.selected input[value="FULL_TIME"]')).toBeTruthy();
+    });
+
+    it("keeps activation enabled even before search scope is set", async () => {
         const store = await loadPopup();
 
         expect(document.getElementById("activate").disabled).toBe(false);
-        expect(document.getElementById("access-status-pill").textContent).toBe("Access unknown");
+        expect(document.getElementById("amazon-email-display").textContent).toBe("Not detected");
 
         const input = document.getElementById("city-input");
         input.value = "London";
@@ -215,33 +234,10 @@ describe("paid-access popup", () => {
         expect(store.cityTags).toEqual(["London"]);
         expect(store.allCitiesSelected).toBe(false);
         expect(document.getElementById("activate").disabled).toBe(false);
-        expect(document.getElementById("license-status").textContent).toMatch(/Search is free/);
     });
 
     it("activates with All cities and notifies the active tab", async () => {
-        globalThis.fetch = vi.fn().mockResolvedValue({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({
-                allowed: true,
-                isProUser: true,
-                accessExpiresAt: new Date(Date.now() + 86400000).toISOString(),
-            }),
-        });
-        const store = await loadPopup({
-            licenseBuyerEmail: "buyer@example.com",
-            licenseAmazonEmail: "paid@example.com",
-            licenseEmail: "paid@example.com",
-            licenseState: {
-                allowed: true,
-                isProUser: false,
-                emailId: "buyer@example.com",
-                amazonEmailId: "paid@example.com",
-                email: "paid@example.com",
-                accessExpiresAt: new Date(Date.now() + 86400000).toISOString(),
-                expiresAt: Date.now() + 60000,
-            },
-        });
+        const store = await loadPopup();
         const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
 
         document.getElementById("add-all-cities").click();
@@ -261,15 +257,13 @@ describe("paid-access popup", () => {
         });
     });
 
-    it("activates after denied license validation without disabling the toggle", async () => {
+    it("shows stored Amazon login email and activates without license validation", async () => {
         const store = await loadPopup({
-            licenseBuyerEmail: "buyer@example.com",
-            licenseAmazonEmail: "unpaid@example.com",
-            licenseEmail: "unpaid@example.com",
+            __amz_login_username: "candidate@example.com",
         });
 
+        expect(document.getElementById("amazon-email-display").textContent).toBe("candidate@example.com");
         expect(document.getElementById("activate").disabled).toBe(false);
-        expect(document.getElementById("access-status-pill").textContent).toBe("No active access");
 
         const activate = document.getElementById("activate");
         activate.checked = true;
@@ -277,85 +271,29 @@ describe("paid-access popup", () => {
         await flushPopup();
 
         expect(store.__ap).toBe(true);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it("shows active access and manually refreshes the backend license", async () => {
-        const future = new Date(Date.now() + 86400000).toISOString();
-        globalThis.fetch = vi.fn().mockResolvedValue({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({
-                allowed: true,
-                isProUser: true,
-                accessExpiresAt: future,
-                message: "Access active",
-            }),
-        });
-
-        await loadPopup({
-            licenseBuyerEmail: "buyer@example.com",
-            licenseAmazonEmail: "paid@example.com",
-            licenseEmail: "paid@example.com",
-        });
-        await flushPopup();
-
-        expect(document.getElementById("access-status-pill").textContent).toMatch(/Access active until/);
-        const initialChecks = globalThis.fetch.mock.calls.filter(call => String(call[0]).includes("/license/check")).length;
+    it("refresh syncs local runtime controls without calling a license backend", async () => {
+        await loadPopup({ __amz_login_username: "candidate@example.com" });
 
         document.getElementById("refresh_info").dispatchEvent(
             new window.Event("submit", { bubbles: true, cancelable: true })
         );
         await flushPopup();
 
-        const nextChecks = globalThis.fetch.mock.calls.filter(call => String(call[0]).includes("/license/check")).length;
-        expect(nextChecks).toBeGreaterThan(initialChecks);
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+        expect(document.getElementById("refresh_btn").innerText).toBe("Success");
     });
 
-    it("shows check failed without disabling activation", async () => {
-        globalThis.fetch = vi.fn(() => Promise.reject(new Error("offline")));
-
-        await loadPopup({
-            licenseBuyerEmail: "buyer@example.com",
-            licenseAmazonEmail: "paid@example.com",
-            licenseEmail: "paid@example.com",
-        });
-
-        expect(document.getElementById("activate").disabled).toBe(false);
-        expect(document.getElementById("access-status-pill").textContent).toBe("Check failed");
-    });
-
-    it("opens hosted checkout pages without collecting emails in the popup", async () => {
-        const store = await loadPopup();
+    it("clears displayed Amazon identity when opened on an Amazon login page", async () => {
+        const store = await loadPopup({
+            __amz_login_username: "login@example.com",
+        }, { id: 12, url: "https://auth.hiring.amazon.com/#/login" });
         const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
-        const openSpy = vi.spyOn(globalThis.window, "open").mockImplementation(() => null);
-        globalThis.fetch = vi.fn(() => Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({
-                allowed: false,
-                isProUser: false,
-                checkoutUrl: "https://checkout.dodo/pro",
-            }),
-        }));
 
-        expect(document.getElementById("checkout-buyer-email")).toBeNull();
-        expect(document.getElementById("checkout-amazon-email")).toBeNull();
-
-        document.getElementById("checkout_pro_btn").click();
-        await flushPopup();
-
-        expect(store[STORAGE_KEYS.LICENSE_BUYER_EMAIL]).toBeUndefined();
-        expect(store[STORAGE_KEYS.LICENSE_AMAZON_EMAIL]).toBeUndefined();
-        expect(globalThis.fetch).toHaveBeenCalledWith(
-            "https://getslotnow.com/extension-usage-tracker/api/amazon-warehouse-jobs-uk/license/checkout",
-            expect.objectContaining({ method: "POST" })
-        );
-        expect(openSpy).toHaveBeenNthCalledWith(
-            1,
-            "https://checkout.dodo/pro",
-            "_blank",
-            "noopener,noreferrer"
-        );
+        expect(document.getElementById("amazon-email-display").textContent).toBe("Not detected");
+        expect(store[STORAGE_KEYS.AMAZON_LOGIN_USERNAME]).toBe("login@example.com");
     });
 
     it("reset clears stale service and credential keys", async () => {
@@ -368,20 +306,7 @@ describe("paid-access popup", () => {
             cityTags: ["London"],
             allCitiesSelected: true,
             __ap: true,
-            licenseBuyerEmail: "buyer@example.com",
-            licenseAmazonEmail: "paid@example.com",
-            licenseEmail: "paid@example.com",
-            licenseState: {
-                allowed: true,
-                isProUser: false,
-                emailId: "buyer@example.com",
-                amazonEmailId: "paid@example.com",
-                email: "paid@example.com",
-                accessExpiresAt: new Date(Date.now() + 86400000).toISOString(),
-                expiresAt: Date.now() + 60000,
-            },
         });
-        const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
 
         document.getElementById("ais_visa_info").dispatchEvent(
             new window.Event("submit", { bubbles: true, cancelable: true })
@@ -394,8 +319,5 @@ describe("paid-access popup", () => {
         expect(store.__pw).toBeUndefined();
         expect(store.__amz_selected_client_id).toBeUndefined();
         expect(store.__ap).toBe(false);
-        expect(store[STORAGE_KEYS.LICENSE_BUYER_EMAIL]).toBe("buyer@example.com");
-        expect(store[STORAGE_KEYS.LICENSE_AMAZON_EMAIL]).toBe("paid@example.com");
-        expect(store[STORAGE_KEYS.LICENSE_EMAIL]).toBe("paid@example.com");
     });
 });

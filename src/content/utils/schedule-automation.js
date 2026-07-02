@@ -9,10 +9,14 @@
   const storage = root.AMZ_STORAGE;
   const urls = root.AMZ_URL;
   const text = root.AMZ_TEXT;
-  const log = root.AMZ_LOGGER.create('[amazon-shift][schedule-automation]', {
-    workflow: 'schedule-automation',
-    source: 'content/utils/schedule-automation.js',
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
 
   function create({ isActive, onNoApplyPath } = {}) {
     let cleanupCurrent = null;
@@ -243,7 +247,6 @@
         clearPostLabelApplyTimer();
         const scheduleDetails = getScheduleCardDetails(button);
         storage.setLocal({ [STORAGE_KEYS.LAST_SELECTED_SCHEDULE]: scheduleDetails });
-        root.AMZ_APPLICATION_OBSERVABILITY?.recordScheduleClick?.(scheduleDetails, source);
 
         const beforeUrl = urls.currentUrl();
         const clicked = dom.clickElement(button, label, { nativeOnly: true });

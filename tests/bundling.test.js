@@ -15,30 +15,28 @@ function contextBody(buildScript, name) {
 }
 
 describe("production bundling", () => {
-    it("keeps application observability scripts in production content bundles", () => {
+    it("keeps production content bundles free of removed legacy scripts", () => {
         const buildScript = readFileSync(resolve(ROOT, "scripts", "build.js"), "utf8");
         const applicationContent = contextBody(buildScript, "APPLICATION_CONTENT");
         const mainContent = contextBody(buildScript, "MAIN_CONTENT");
 
-        expect(applicationContent).toContain('"content/utils/application-observability.js"');
         expect(applicationContent).toContain('"content/utils/dom.js"');
         expect(applicationContent).toContain('"content/createapp.js"');
+        expect(applicationContent).not.toContain('"content/utils/application-observability.js"');
         expect(applicationContent).not.toContain('"shared/api-client.js"');
         expect(applicationContent).not.toContain('"shared/validation.js"');
         expect(applicationContent).not.toContain('"shared/notifications.js"');
-        expect(applicationContent.indexOf('"content/utils/application-observability.js"'))
-            .toBeLessThan(applicationContent.indexOf('"content/createapp.js"'));
         expect(applicationContent.indexOf('"content/utils/dom.js"'))
             .toBeLessThan(applicationContent.indexOf('"content/createapp.js"'));
 
-        expect(mainContent).toContain('"content/utils/application-observability.js"');
+        expect(mainContent).not.toContain('"content/utils/application-observability.js"');
         expect(mainContent).not.toContain('"shared/job-found-channel.js"');
-        expect(mainContent).not.toContain('"content/login.js"');
+        expect(mainContent).toContain('"content/login.js"');
+        expect(mainContent.indexOf('"content/login.js"'))
+            .toBeLessThan(mainContent.indexOf('"content/fetch.js"'));
         expect(mainContent).not.toContain('"shared/api-client.js"');
         expect(mainContent).not.toContain('"shared/validation.js"');
         expect(mainContent).not.toContain('"shared/notifications.js"');
-        expect(mainContent.indexOf('"content/utils/application-observability.js"'))
-            .toBeLessThan(mainContent.indexOf('"content/fetch.js"'));
         expect(buildScript).not.toContain("JOB_FOUND_CHANNEL");
         expect(buildScript).not.toContain("job-found-channel");
         expect(buildScript).not.toContain("background/telegram.js");

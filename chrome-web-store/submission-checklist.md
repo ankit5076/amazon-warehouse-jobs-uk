@@ -11,8 +11,8 @@
 
 ## Required URLs
 
-- Privacy policy: `https://getslotnow.com/extension-usage-tracker/privacy`
-- Support: `https://getslotnow.com/extension-usage-tracker/support`
+- Privacy policy: `TBD before public submission`
+- Support: `TBD before public submission`
 
 ## Dashboard Text
 
@@ -22,4 +22,4 @@
 
 ## Final Gate
 
-Do not submit for public review until the production backend returns live Dodo checkout URLs, not `test.checkout.dodopayments.com`.
+Do not submit for public review until the final privacy/support URLs and refreshed no-payment screenshots are in place.

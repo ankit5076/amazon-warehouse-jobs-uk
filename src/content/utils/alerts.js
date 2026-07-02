@@ -5,10 +5,14 @@
   if (root.AMZ_ALERTS) return;
 
   const { ALERTS } = root.AMZ_CONSTANTS;
-  const log = root.AMZ_LOGGER.create('[alerts]', {
-    workflow: 'alerts',
-    source: 'content/utils/alerts.js',
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
   let activeAlertAudio = null;
 
   async function playSound(file, volume, label) {

@@ -6,10 +6,14 @@
 
   const { STORAGE_KEYS } = root.AMZ_CONSTANTS;
   const state = root.AMZ_STATE;
-  const log = root.AMZ_LOGGER.create('[amazon-shift][page-refresh]', {
-    workflow: 'page-refresh',
-    source: 'content/utils/page-refresh.js',
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
   let refreshTimerId = null;
 
   function clearJobSearchRefresh() {

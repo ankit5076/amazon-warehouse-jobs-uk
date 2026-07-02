@@ -6,10 +6,14 @@
 
   const text = root.AMZ_TEXT;
   const { DOM, SELECTORS, TEXT_LIMITS } = root.AMZ_CONSTANTS;
-  const log = root.AMZ_LOGGER.create('[dom]', {
-    workflow: 'dom-automation',
-    source: 'content/utils/dom.js',
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
 
   function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -100,92 +104,16 @@
     }) || null;
   }
 
-  function safePerformanceNow() {
-    return typeof performance !== 'undefined' && typeof performance.now === 'function'
-      ? performance.now()
-      : Date.now();
-  }
-
-  function currentUrl() {
-    try {
-      return root.AMZ_URL?.currentUrl?.() || window.location.href || '';
-    } catch (_) {
-      return '';
-    }
-  }
-
-  function routeFromUrl(url) {
-    try {
-      const parsed = new URL(url);
-      const hashRoute = parsed.hash ? parsed.hash.slice(1).split('?')[0] : '';
-      return hashRoute || parsed.pathname || null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function clickMethod(options = {}) {
-    if (options.nativeOnly) return 'native';
-    if (options.targetSelf) return 'pointer-target-self';
-    return 'pointer';
-  }
-
-  function recordButtonClickTelemetry(element, label, options, timing) {
-    const recorder = root.AMZ_APPLICATION_OBSERVABILITY?.recordButtonClick;
-    if (typeof recorder !== 'function') return;
-
-    const pageUrlAfter = currentUrl();
-    const pageUrlBefore = timing.pageUrlBefore || pageUrlAfter;
-    const description = describeButton(element) || {};
-    const context = root.AMZ_URL?.getApplicationContextFromUrl?.(pageUrlAfter) || {};
-    const jobId = context.jobId || root.AMZ_URL?.getJobIdFromUrl?.(pageUrlAfter) || null;
-    const scheduleId = context.scheduleId || root.AMZ_URL?.getScheduleIdFromUrl?.(pageUrlAfter) || null;
-
-    recorder({
-      ...context,
-      href: pageUrlAfter,
-      jobId,
-      scheduleId,
-    }, {
-      label,
-      source: 'content/utils/dom.js',
-      clicked: true,
-      durationMs: safePerformanceNow() - timing.startedPerfMs,
-      method: clickMethod(options),
-      retry: options.telemetryRetry === true,
-      nativeOnly: options.nativeOnly === true,
-      targetSelf: options.targetSelf === true,
-      pageUrlBefore,
-      pageUrlAfter,
-      routeBefore: routeFromUrl(pageUrlBefore),
-      routeAfter: routeFromUrl(pageUrlAfter),
-      buttonText: description.text,
-      buttonAriaLabel: description.ariaLabel,
-      buttonTestId: description.testId,
-      buttonClassName: description.className,
-      buttonDisabled: description.disabled,
-    }, {
-      epochMs: timing.startedEpochMs,
-      perfMs: timing.startedPerfMs,
-    });
-  }
-
   function clickElement(element, label = 'element', options = {}) {
     if (!isClickable(element)) {
       log.debug(label + ': element is not clickable');
       return false;
     }
 
-    const timing = {
-      startedEpochMs: Date.now(),
-      startedPerfMs: safePerformanceNow(),
-      pageUrlBefore: currentUrl(),
-    };
     const { nativeOnly = false, targetSelf = false } = options;
     if (nativeOnly && typeof element.click === 'function') {
       element.click();
       log.debug(label + ': native click dispatched');
-      recordButtonClickTelemetry(element, label, options, timing);
       return true;
     }
 
@@ -246,12 +174,10 @@
     if (eventTarget === element && typeof element.click === 'function') {
       element.click();
       log.debug(label + ': native click dispatched after pointer sequence');
-      recordButtonClickTelemetry(element, label, options, timing);
       return true;
     }
 
     log.debug(label + ': click dispatched on hit target');
-    recordButtonClickTelemetry(element, label, options, timing);
     return true;
   }
 

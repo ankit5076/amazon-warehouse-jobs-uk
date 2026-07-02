@@ -18,10 +18,14 @@
   const jobMatcher = root.AMZ_JOB_MATCH;
   const toasts = root.AMZ_TOASTS;
   const dom = root.AMZ_DOM;
-  const log = root.AMZ_LOGGER.create('[amazon-shift][fetch]', {
-    workflow: 'job-search',
-    source: 'content/fetch.js',
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
 
   const pollerState = {
     selectedCity: '',
@@ -54,7 +58,6 @@
   let authRedirectInProgress = false;
   let authProbeRefreshPromise = null;
   let authProbeDeniedRetryPageUrl = '';
-  let lastAmazonSignInLicenseSyncKey = '';
   const JOB_DETAIL_NAVIGATION_FALLBACK_DELAY_MS = 1200;
 
   function applyIntervalSettings(source = {}) {
@@ -265,48 +268,6 @@
       details,
     });
     return false;
-  }
-
-  async function ensurePaymentAllowed(reason) {
-    const result = await root.AMZ_PAYMENT_GATE.requireAllowed({
-      allowCache: true,
-      refresh: false,
-    });
-    if (result.ok) return true;
-    log.warn('payment gate blocked automation', {
-      reason,
-      details: result.reason,
-    });
-    toasts.showCreditsRequiredPopup({
-      reason: result.reason || 'access-required',
-    });
-    renderPollingStatus({
-      state: 'failed',
-      details: result.reason || 'Paid access is required before booking.',
-    });
-    return false;
-  }
-
-  async function syncLicenseAfterAmazonSignIn(reason) {
-    const helpers = root.AMZ_LICENSE_STATE;
-    if (!helpers?.getStoredEmails || !helpers?.refresh) return;
-    const identity = await helpers.getStoredEmails();
-    if (!identity.amazonEmailId) return;
-    const syncKey = `${identity.amazonEmailId}:${reason || 'amazon-sign-in'}`;
-    if (lastAmazonSignInLicenseSyncKey === syncKey) return;
-    lastAmazonSignInLicenseSyncKey = syncKey;
-    try {
-      await helpers.refresh(identity, { allowCache: false });
-      log.info('paid access synced after Amazon sign-in', {
-        amazonEmailId: identity.amazonEmailId,
-        reason,
-      });
-    } catch (error) {
-      log.warn('paid access sync after Amazon sign-in failed', {
-        reason,
-        error: error?.message || String(error),
-      });
-    }
   }
 
   function getEffectiveIntervalMs() {
@@ -693,7 +654,12 @@
     const anyLocationSearch =
       pollerState.allCitiesSelected === true &&
       (!Array.isArray(pollerState.cityTags) || pollerState.cityTags.length === 0);
-    const { storedTags, matchingTags, matchedJob: locationMatchedJob } = jobMatcher.findMatchingJob(searchableJobCards, {
+    const {
+      storedTags,
+      matchingTags,
+      matchedJob: locationMatchedJob,
+      matchedLocation: locationMatchedLocation,
+    } = jobMatcher.findMatchingJob(searchableJobCards, {
       cityTags: pollerState.cityTags,
       selectedCity: pollerState.selectedCity,
       selectedJobTypes: pollerState.jobType,
@@ -701,6 +667,9 @@
     const matchedJob = anyLocationSearch
       ? findAnyLocationMatchedJob(searchableJobCards)
       : locationMatchedJob;
+    const matchedLocation = anyLocationSearch
+      ? null
+      : locationMatchedLocation;
     pollerState.cityTags = storedTags;
 
     // Keep match evaluation on the critical path; persistence is background-only.
@@ -713,12 +682,14 @@
         ...jobMatcher.summarizeJob(matchedJob),
         selectedCity: pollerState.selectedCity || null,
         matchingTagCount: matchingTags.length,
+        matchedLocation,
         anyLocationSearch,
       });
       log.debug('matchJobsToCity result detail', {
         matched: true,
         diagnostics: matchDiagnostics,
         anyLocationSearch,
+        matchedLocation,
         matchedJob,
       });
     } else {
@@ -732,45 +703,15 @@
     }
     if (!matchedJob) return null;
 
-    const gate = await root.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true, refresh: false });
-    if (!gate.ok) {
-      log.warn('matched job blocked by payment gate', {
-        job: jobMatcher.summarizeJob(matchedJob),
-        reason: gate.reason,
-      });
-      toasts.showCreditsRequiredPopup({
-        city: matchedJob.city,
-        jobId: matchedJob.jobId || null,
-        reason: gate.reason || 'access-required',
-      });
-      renderPollingStatus({
-        state: 'failed',
-        details: gate.reason || 'Paid access is required before automation can continue.',
-      });
-      return null;
-    }
-
     // Sound and metadata are optional side effects and must not delay navigation.
     void root.AMZ_ALERTS.playJobFoundSound();
-    toasts.showJobFoundToast(matchedJob.city);
+    toasts.showJobFoundToast({ job: matchedJob, matchedLocation });
 
     const jobDetailUrl = root.AMZ_URL.buildJobDetailUrl(matchedJob.jobId, AMAZON.COUNTRY_CONFIG);
-    const observabilityTrace = root.AMZ_APPLICATION_OBSERVABILITY?.createApplicationAttemptTrace?.({
-      matchedJob,
-      searchResult: requestResult,
-      searchContext: summarizeSearchContext(),
-      matchDiagnostics,
-    }) || null;
-    if (observabilityTrace) {
-      root.AMZ_APPLICATION_OBSERVABILITY.flushProgress(observabilityTrace, 'JOB_MATCHED', {
-        detailedOutcome: 'JOB_MATCHED',
-      }, { href: window.location.href, jobId: matchedJob.jobId });
-      root.AMZ_APPLICATION_OBSERVABILITY.recordJobDetailNavigation(observabilityTrace, matchedJob, jobDetailUrl);
-      await root.AMZ_APPLICATION_OBSERVABILITY.persistPendingTrace(observabilityTrace);
-    }
     void state.setLastMatchedJob(jobMatcher.buildLastMatchedJobMetadata(matchedJob, {
       selectedCity: pollerState.selectedCity,
       matchingTags,
+      matchedLocation,
       distance: pollerState.distance,
       selectedJobTypes: pollerState.jobType,
       country: AMAZON.COUNTRY_CONFIG.country,
@@ -878,7 +819,7 @@
       sampleJobs: result.jobCards.slice(0, 5).map(jobMatcher.summarizeJob),
     });
 
-    toasts.showJobsReceivedToast(pollerState.intervalMs);
+    toasts.showJobsReceivedToast(pollerState.intervalMs, result.jobCards);
     const matchedJob = await matchJobsToCity(result.jobCards, result);
     if (matchedJob) {
       poller.stop();
@@ -892,6 +833,20 @@
     getDelayMs: getEffectiveIntervalMs,
   });
 
+  async function restartPollerForLiveSettings(reason, changedKeys = []) {
+    if (!pollerState.isActive || !root.AMZ_URL.isJobSearchPage()) return;
+    if (!poller.isEnabled()) {
+      await handlePageNavigation();
+      return;
+    }
+    log.debug('runtime settings changed; rescheduling poller', {
+      reason,
+      keys: changedKeys,
+      intervalMs: getEffectiveIntervalMs(),
+    });
+    poller.restart();
+  }
+
   async function handlePageNavigation() {
     log.debug('handlePageNavigation started', {
       url: window.location.href,
@@ -901,13 +856,10 @@
       isMyApplicationsPage: root.AMZ_URL.isMyApplicationsPage(),
       isJobDetailPage: root.AMZ_URL.isJobDetailPage(),
     });
-    void root.AMZ_IDENTITY.syncEmailFromPage().catch(error => {
-      log.debug('identity sync skipped after navigation', { error: error?.message || String(error) });
-    });
-
     if (root.AMZ_URL.isLoginPage() && pollerState.isActive) {
       authProbeDeniedRetryPageUrl = '';
       log.info('login page detected; waiting for manual Amazon sign-in');
+      await root.AMZ_LOGIN?.handleAuthLoginFlow?.();
       return;
     }
 
@@ -926,7 +878,6 @@
     }
 
     if (root.AMZ_URL.isJobDetailPage() && pollerState.isActive) {
-      if (!await ensurePaymentAllowed('job-detail')) return;
       log.debug('job detail page active; starting schedule automation');
       scheduleAutomation.start();
     }
@@ -946,6 +897,7 @@
     if (changedKeys.length === 0) return;
 
     let shouldRenderPollingStatus = false;
+    let shouldRestartPoller = false;
     log.debug('storage changed', {
       keys: changedKeys,
       areaName,
@@ -954,26 +906,37 @@
     if (changes[STORAGE_KEYS.SELECTED_CITY]) {
       pollerState.selectedCity = changes[STORAGE_KEYS.SELECTED_CITY].newValue;
       shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
     if (changes[STORAGE_KEYS.ALL_CITIES_SELECTED]) {
       pollerState.allCitiesSelected = changes[STORAGE_KEYS.ALL_CITIES_SELECTED].newValue === true;
       shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
-    if (changes[STORAGE_KEYS.LATITUDE]) pollerState.lat = changes[STORAGE_KEYS.LATITUDE].newValue;
-    if (changes[STORAGE_KEYS.LONGITUDE]) pollerState.lng = changes[STORAGE_KEYS.LONGITUDE].newValue;
+    if (changes[STORAGE_KEYS.LATITUDE]) {
+      pollerState.lat = changes[STORAGE_KEYS.LATITUDE].newValue;
+      shouldRestartPoller = true;
+    }
+    if (changes[STORAGE_KEYS.LONGITUDE]) {
+      pollerState.lng = changes[STORAGE_KEYS.LONGITUDE].newValue;
+      shouldRestartPoller = true;
+    }
     if (changes[STORAGE_KEYS.DISTANCE]) {
       pollerState.distance = changes[STORAGE_KEYS.DISTANCE].newValue;
       shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
     if (changes[STORAGE_KEYS.JOB_TYPE]) {
       pollerState.jobType = root.AMZ_RUNTIME_CONTROLS.normalizeJobTypeList(
         changes[STORAGE_KEYS.JOB_TYPE].newValue
       );
       shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
     if (changes[STORAGE_KEYS.CITY_TAGS]) {
       pollerState.cityTags = changes[STORAGE_KEYS.CITY_TAGS].newValue || [];
       shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
     if (changes[STORAGE_KEYS.AUTH_PROBE_STATUS]) {
       pollerState.authProbeStatus =
@@ -986,7 +949,6 @@
         if (root.AMZ_URL.isJobSearchPage()) {
           await retryDeniedAmazonAuthProbeOnce('auth-probe-storage-change');
           if (isAmazonSessionAuthenticated()) {
-            await syncLicenseAfterAmazonSignIn('auth-probe-retry');
             await handlePageNavigation();
             return;
           }
@@ -1003,7 +965,6 @@
         root.AMZ_URL.isJobSearchPage()
       ) {
         authProbeDeniedRetryPageUrl = '';
-        await syncLicenseAfterAmazonSignIn('auth-probe-storage-change');
         await handlePageNavigation();
       }
     }
@@ -1018,11 +979,15 @@
     if (changes[STORAGE_KEYS.JOB_SEARCH_FALLBACK_DISTANCE_KM]) {
       pollerState.jobSearch.fallbackDistanceKm =
         changes[STORAGE_KEYS.JOB_SEARCH_FALLBACK_DISTANCE_KM].newValue || '';
+      shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
     if (changes[STORAGE_KEYS.JOB_SEARCH_FETCH_TIMEOUT_MS]) {
       pollerState.jobSearch.fetchTimeoutMs = root.AMZ_RUNTIME_CONTROLS.normalizePositiveInteger(
         changes[STORAGE_KEYS.JOB_SEARCH_FETCH_TIMEOUT_MS].newValue
       );
+      shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
 
     if (
@@ -1044,25 +1009,23 @@
         pollerState.intervalUnit,
         pollerState.intervalMinMs
       );
-      poller.restart();
       shouldRenderPollingStatus = true;
+      shouldRestartPoller = true;
     }
 
+    const activeChanged = Boolean(changes[STORAGE_KEYS.ACTIVE]);
     if (changes[STORAGE_KEYS.ACTIVE]) {
       pollerState.isActive = changes[STORAGE_KEYS.ACTIVE].newValue === true;
       log.info('active state changed from storage', { isActive: pollerState.isActive });
       if (pollerState.isActive) {
         await handlePageNavigation();
       } else {
-        root.AMZ_APPLICATION_OBSERVABILITY?.finalizePendingDeactivated?.({
-          href: window.location.href,
-          jobId: root.AMZ_URL.getJobIdFromUrl(),
-        }, {
-          source: 'active-toggle',
-          page_url: window.location.href,
-        });
         stopAutomation();
       }
+    }
+
+    if (shouldRestartPoller && !activeChanged) {
+      await restartPollerForLiveSettings('storage-change', changedKeys);
     }
 
     if (shouldRenderPollingStatus && pollerState.isActive && root.AMZ_URL.isJobSearchPage()) {
@@ -1102,8 +1065,5 @@
   window.addEventListener('popstate', handleRouteMutation);
 
   await loadSettings();
-  void root.AMZ_IDENTITY.syncEmailFromPage().catch(error => {
-    log.debug('initial identity sync failed', { error: error?.message || String(error) });
-  });
   await handlePageNavigation();
 })(typeof globalThis !== 'undefined' ? globalThis : self);

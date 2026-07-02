@@ -78,13 +78,13 @@ describe("AMZ_STATE local settings", () => {
         const { STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
         const store = useLocalStore();
 
-        await globalThis.AMZ_STATE.setAllCitiesSelection([]);
+        await globalThis.AMZ_STATE.setAllCitiesSelection(["London", "Barking"]);
         expect(store[STORAGE_KEYS.ALL_CITIES_SELECTED]).toBe(true);
-        expect(store[STORAGE_KEYS.CITY_TAGS]).toEqual([]);
+        expect(store[STORAGE_KEYS.CITY_TAGS]).toEqual(["Barking", "London"]);
 
-        await globalThis.AMZ_STATE.setCityTags(["London"]);
+        await globalThis.AMZ_STATE.setCityTags(["London", "Barking"]);
         const renderState = await globalThis.AMZ_STATE.getTagRenderState("");
-        expect(renderState.cityTags).toEqual(["London"]);
+        expect(renderState.cityTags).toEqual(["Barking", "London"]);
     });
 
     it("resetLocal clears stale storage before writing local defaults", async () => {

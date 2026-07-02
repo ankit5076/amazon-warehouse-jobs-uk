@@ -59,7 +59,7 @@ describe("AMZ_POLLING", () => {
         await flushMicrotasks();
         expect(run).toHaveBeenCalledTimes(1);
 
-        await vi.advanceTimersByTimeAsync(1649);
+        await vi.advanceTimersByTimeAsync(1349);
         expect(run).toHaveBeenCalledTimes(1);
 
         await vi.advanceTimersByTimeAsync(1);

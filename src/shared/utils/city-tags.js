@@ -10,6 +10,18 @@
     return text.normalizeForComparison(value);
   }
 
+  function compareCityTags(left, right) {
+    return text.normalizeWhitespace(left).localeCompare(
+      text.normalizeWhitespace(right),
+      undefined,
+      { sensitivity: 'base' }
+    );
+  }
+
+  function sortCityTags(tags = []) {
+    return [...tags].sort(compareCityTags);
+  }
+
   function mergeWithSelectedCity(tags, selectedCityName) {
     const merged = [];
     const seen = new Set();
@@ -28,7 +40,7 @@
       merged.push(selectedCity);
     }
 
-    return merged;
+    return sortCityTags(merged);
   }
 
   function normalizeForMatching(value) {
@@ -53,6 +65,7 @@
 
   root.AMZ_CITY_TAGS = Object.freeze({
     normalizeCityTag,
+    sortCityTags,
     mergeWithSelectedCity,
     normalizeForMatching,
     findMatchingJob,

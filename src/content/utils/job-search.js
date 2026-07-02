@@ -7,12 +7,14 @@
   const { AMAZON } = root.AMZ_CONSTANTS;
   const state = root.AMZ_STATE;
   const runtimeControls = root.AMZ_RUNTIME_CONTROLS;
-  const log = root.AMZ_LOGGER?.create?.('[amazon-shift][job-search-api]', {
-    workflow: 'job-search',
-    source: 'content/utils/job-search.js',
-  }) || Object.freeze({
-    debug: () => {},
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
 
   async function readJobSearchControls() {
     return state.getJobSearchControls();
@@ -32,6 +34,27 @@
     return Array.isArray(items)
       ? items.map(item => ({ ...item }))
       : [];
+  }
+
+  function normalizeCityTag(value) {
+    if (root.AMZ_CITY_TAGS?.normalizeCityTag) {
+      return root.AMZ_CITY_TAGS.normalizeCityTag(value);
+    }
+    return root.AMZ_TEXT.normalizeForComparison(value);
+  }
+
+  function getNormalizedCityTags(parameters = {}) {
+    return runtimeControls.normalizeStringList(parameters.cityTags)
+      .map(normalizeCityTag)
+      .filter(Boolean);
+  }
+
+  function hasAdditionalCityTag(parameters = {}) {
+    const selectedCity = normalizeCityTag(parameters.selectedCity || '');
+    if (!selectedCity) return false;
+
+    const cityTags = getNormalizedCityTags(parameters);
+    return cityTags.some(cityTag => cityTag !== selectedCity);
   }
 
   function getJobTypeContainFilter(jobType, includeGraphqlFilter = AMAZON.COUNTRY_CONFIG.search?.includeJobTypeFilter === true) {
@@ -61,7 +84,9 @@
         val: [...privateScheduleValues],
       },
     ];
-    const jobTypeFilter = getJobTypeContainFilter(parameters.jobType);
+    const jobTypeFilter = isNoGeoLocationSearch(parameters)
+      ? null
+      : getJobTypeContainFilter(parameters.jobType);
     if (jobTypeFilter) containFilters.push(jobTypeFilter);
     return containFilters;
   }
@@ -83,16 +108,21 @@
     if (parameters.allCitiesSelected === true) return true;
 
     const selectedCity = root.AMZ_TEXT.normalizeWhitespace(parameters.selectedCity || '');
-    const cityTags = root.AMZ_RUNTIME_CONTROLS.normalizeStringList(parameters.cityTags);
+    const cityTags = runtimeControls.normalizeStringList(parameters.cityTags);
     return !selectedCity && cityTags.length > 0;
   }
 
+  function isNoGeoLocationSearch(parameters = {}) {
+    if (AMAZON.COUNTRY_CONFIG.search?.supportsAllCitiesSearch !== true) return false;
+    return isAllCitiesSearch(parameters) || hasAdditionalCityTag(parameters);
+  }
+
   function shouldIncludeGeoQueryClauseForRequest(parameters = {}) {
-    return shouldIncludeGeoQueryClause() && !isAllCitiesSearch(parameters);
+    return shouldIncludeGeoQueryClause() && !isNoGeoLocationSearch(parameters);
   }
 
   function shouldIncludeHoursPerWeekRangeForRequest(parameters = {}) {
-    return shouldIncludeHoursPerWeekRange() && !isAllCitiesSearch(parameters);
+    return shouldIncludeHoursPerWeekRange() && !isNoGeoLocationSearch(parameters);
   }
 
   function shouldIncludeConsolidateScheduleForRequest(parameters = {}) {
@@ -100,7 +130,7 @@
   }
 
   function shouldIncludeDateFiltersForRequest(parameters = {}) {
-    return shouldIncludeDateFilters() && !isAllCitiesSearch(parameters);
+    return shouldIncludeDateFilters() && !isNoGeoLocationSearch(parameters);
   }
 
   function getRequestValidationError(parameters = {}, controls = {}) {
@@ -166,22 +196,20 @@
           range: { startDate: new Date().toISOString().split('T')[0] },
         }]
       : [];
-    const searchJobRequest = isAllCitiesSearch(parameters)
-      ? baseSearchJobRequest
-      : {
-          ...baseSearchJobRequest,
-          keyWords: searchConfig.EMPTY_KEYWORDS,
-          equalFilters: clonePlainObjectList(countrySearchConfig.equalFilters),
-          containFilters: buildContainFilters(parameters),
-          rangeFilters: shouldIncludeHoursPerWeekRangeForRequest(parameters)
-            ? [{
-                key: searchConfig.HOURS_PER_WEEK_FILTER_KEY,
-                range: AMAZON.GRAPHQL.HOURS_PER_WEEK_RANGE,
-              }]
-            : [],
-          orFilters: [],
-          dateFilters,
-        };
+    const searchJobRequest = {
+      ...baseSearchJobRequest,
+      keyWords: searchConfig.EMPTY_KEYWORDS,
+      equalFilters: clonePlainObjectList(countrySearchConfig.equalFilters),
+      containFilters: buildContainFilters(parameters),
+      rangeFilters: shouldIncludeHoursPerWeekRangeForRequest(parameters)
+        ? [{
+            key: searchConfig.HOURS_PER_WEEK_FILTER_KEY,
+            range: AMAZON.GRAPHQL.HOURS_PER_WEEK_RANGE,
+          }]
+        : [],
+      orFilters: [],
+      dateFilters,
+    };
 
     if (shouldIncludeConsolidateScheduleForRequest(parameters)) {
       searchJobRequest.consolidateSchedule = searchConfig.CONSOLIDATE_SCHEDULE;
@@ -258,6 +286,7 @@
       locale: request.locale || null,
       pageSize: request.pageSize || null,
       allCitiesSearch: isAllCitiesSearch(parameters),
+      noGeoLocationSearch: isNoGeoLocationSearch(parameters),
       selectedCity: parameters.selectedCity || null,
       selectedJobTypes: runtimeControls.normalizeJobTypeList(parameters.jobType),
       cityTagCount: runtimeControls.normalizeStringList(parameters.cityTags).length,
@@ -721,6 +750,7 @@
     getJobTypeContainFilter,
     getRequestValidationError,
     isAllCitiesSearch,
+    isNoGeoLocationSearch,
     isAuthRelatedFailure,
     readJobSearchControls,
     shouldIncludeConsolidateSchedule,

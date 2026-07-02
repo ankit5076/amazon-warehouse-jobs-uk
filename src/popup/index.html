@@ -5,12 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="popup.css">
     <script src="../shared/constants.js"></script>
-    <script src="../shared/utils/logger.js"></script>
     <script src="../shared/utils/text.js"></script>
     <script src="../shared/utils/storage.js"></script>
-    <script src="../shared/utils/license-api.js"></script>
-    <script src="../shared/utils/license-state.js"></script>
-    <script src="../shared/utils/payment-gate.js"></script>
     <script src="../shared/utils/city-tags.js"></script>
     <script src="../shared/utils/intervals.js"></script>
     <script src="../shared/utils/runtime-controls.js"></script>
@@ -26,14 +22,6 @@
                 <h1>Amazon Warehouse UK <span id="version"></span></h1>
             </div>
             <div class="header-controls">
-                <div class="toggle-section" data-authenticated-section>
-                    <label for="log_mode">Logs</label>
-                    <select id="log_mode" class="log-mode-select" title="Console log mode">
-                        <option value="standard">Standard</option>
-                        <option value="debug">Debug</option>
-                        <option value="off">Off</option>
-                    </select>
-                </div>
                 <div class="toggle-section">
                     <label for="activate">Activate</label>
                     <label class="switch">
@@ -43,27 +31,35 @@
                 </div>
             </div>
         </header>
-        <div class="top-access-row">
-            <span id="access-status-pill" class="access-status-pill unknown" role="status">Access unknown</span>
-        </div>
+        <div class="account-bar">
+            <div class="account-summary">
+                <div class="account-line">
+	                    <span class="amazon-email-chip" role="status">
+	                        <span>Email</span>
+	                        <strong id="amazon-email-display">Not detected</strong>
+	                    </span>
+	                </div>
+	            </div>
+	        </div>
         <div class="dashboard">
             <div class="dropdowns-container" data-authenticated-section>
-                <label class="field field-full" for="city">
+                <label class="field field-full city-field" for="city">
                     <span>City</span>
                     <select id="city" name="city"></select>
                 </label>
-                <label class="field" for="distance">
+                <label class="field distance-field" for="distance">
                     <span>Distance (km)</span>
                     <select id="distance" name="distance"></select>
                 </label>
                 <div class="field field-job-types">
                     <div class="field-header">
-                        <label for="jobType">Job Type</label>
+                        <label id="job-type-label" for="jobType">Job Type</label>
                         <button type="button" id="select-all-job-types">All job types</button>
                     </div>
-                    <select id="jobType" name="jobType" multiple size="4"></select>
+                    <div id="job-type-options" class="job-type-options" role="group" aria-labelledby="job-type-label"></div>
+                    <select id="jobType" name="jobType" multiple size="4" hidden aria-hidden="true" tabindex="-1"></select>
                 </div>
-                <div class="field field-full">
+                <div class="field field-full fetch-field">
                     <label for="fetch_interval_value">Fetch Interval</label>
                     <div class="fetch-interval-container">
                         <input type="number" id="fetch_interval_value" title="Fetch Interval Value" name="fetch_interval_value" min="1" class="fetch-interval-input">
@@ -96,35 +92,6 @@
                     <button id="reset_info" type="submit" class="button configure">Reset</button>
                 </form>
             </div>
-            <section class="access-actions" aria-label="Booking access plans">
-                <div class="pricing-header">
-                    <span>Booking Access</span>
-                    <small id="license-status" class="license-status" role="status"></small>
-                </div>
-                <div class="pricing-grid">
-                    <article class="pricing-card">
-                        <div>
-                            <strong>30-Day Pass</strong>
-                            <p>Unlimited bookings for one month.</p>
-                        </div>
-                        <div class="pricing-row">
-                            <span class="price">$50</span>
-                            <button id="checkout_btn" data-plan="access" type="button" class="button buy checkout-button">Get 30 days</button>
-                        </div>
-                    </article>
-                    <article class="pricing-card pricing-card-featured">
-                        <span class="plan-badge">Best value</span>
-                        <div>
-                            <strong>Pro Annual</strong>
-                            <p>Unlimited bookings for a full year of Amazon hiring cycles.</p>
-                        </div>
-                        <div class="pricing-row">
-                            <span class="price">$120</span>
-                            <button id="checkout_pro_btn" data-plan="pro" type="button" class="button buy checkout-button">Go Pro</button>
-                        </div>
-                    </article>
-                </div>
-            </section>
         </div>
     </section>
     <script src="content.js"></script>

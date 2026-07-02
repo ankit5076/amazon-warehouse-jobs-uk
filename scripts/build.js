@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MV3 build script - produces a shareable, obfuscated Chrome extension under
+ * MV3 build script - produces a shareable Chrome extension under
  * `dist/amazon-warehouse-uk/` and optionally a zip next to it.
  *
  * The source tree intentionally stays split by domain for maintainability. The
@@ -12,14 +12,13 @@
  *   - content-application.<hash>.js        application pages
  *   - create-application.<hash>.js         chrome.scripting injection bundle
  *
- * Files are content-hashed after minification/obfuscation so Chrome cannot
+ * Files are content-hashed after minification so Chrome cannot
  * reuse stale bundle URLs after a build.
  */
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const esbuild = require("esbuild");
-const obfuscator = require("javascript-obfuscator");
 const archiver = require("archiver");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -35,55 +34,23 @@ const ZIP_PATH = path.join(ROOT, ZIP_NAME);
 
 const ESBUILD_TARGET = ["chrome114"];
 
-const OBFUSCATOR_OPTS = {
-    compact: true,
-    // MV3-safe: keep options that avoid eval / new Function / debugger loops.
-    controlFlowFlattening: false,
-    deadCodeInjection: false,
-    splitStrings: false,
-    stringArray: true,
-    stringArrayEncoding: ["base64"],
-    stringArrayThreshold: 0.7,
-    stringArrayWrappersCount: 1,
-    stringArrayWrappersType: "variable",
-    identifierNamesGenerator: "mangled",
-    renameGlobals: false,
-    transformObjectKeys: false,
-    unicodeEscapeSequence: false,
-    numbersToExpressions: false,
-    simplify: true,
-    selfDefending: false,
-    debugProtection: false,
-    disableConsoleOutput: false,
-    target: "browser",
-};
-
 const CONTEXTS = Object.freeze({
     APPLICATION_CONTENT: Object.freeze([
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/messaging.js",
         "content/utils/dom.js",
-        "content/utils/application-observability.js",
         "content/utils/alerts.js",
         "content/createapp.js",
     ]),
     MAIN_CONTENT: Object.freeze([
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
@@ -93,8 +60,7 @@ const CONTEXTS = Object.freeze({
         "content/utils/auth-probe.js",
         "content/utils/page-refresh.js",
         "content/utils/dom.js",
-        "content/utils/application-observability.js",
-        "content/utils/identity.js",
+        "content/login.js",
         "content/utils/toasts.js",
         "content/utils/alerts.js",
         "content/utils/job-search.js",
@@ -106,12 +72,8 @@ const CONTEXTS = Object.freeze({
     POPUP: Object.freeze([
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
         "shared/utils/runtime-controls.js",
@@ -123,12 +85,8 @@ const CONTEXTS = Object.freeze({
     BACKGROUND_DEPS: Object.freeze([
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/messaging.js",
         "background/tab-service.js",
@@ -136,16 +94,11 @@ const CONTEXTS = Object.freeze({
     CREATE_APPLICATION: Object.freeze([
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/url.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/messaging.js",
         "content/utils/dom.js",
-        "content/utils/application-observability.js",
         "content/utils/alerts.js",
         "content/createapp.js",
     ]),
@@ -209,12 +162,6 @@ function copyHashedAsset(srcRelPath, baseName, ext) {
     const filename = writeHashedFile(baseName, ext, source);
     log("asset", `${srcRelPath} -> ${filename}`);
     return filename;
-}
-
-function createIdentifiersPrefix(bundleName) {
-    const readable = bundleName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 32) || "bundle";
-    const digest = crypto.createHash("sha1").update(bundleName).digest("hex").slice(0, 12);
-    return `_amz_${readable}_${digest}_`;
 }
 
 function findMatchingBrace(source, openBraceIndex) {
@@ -300,16 +247,10 @@ async function minifyJavaScript(source) {
 async function buildJsBundle(bundleName, relPaths, replacements = {}, options = {}) {
     const source = relPaths.map(relPath => readBundlePart(relPath, replacements)).join("\n");
     const minified = await minifyJavaScript(source);
-    const obfuscated = obfuscator
-        .obfuscate(minified, {
-            ...OBFUSCATOR_OPTS,
-            identifiersPrefix: createIdentifiersPrefix(bundleName),
-        })
-        .getObfuscatedCode();
     const filename = options.filename
-        ? writeNamedFile(options.filename, obfuscated)
-        : writeHashedFile(bundleName, "js", obfuscated);
-    log("bundle", `${bundleName} -> ${filename} (${source.length}->${obfuscated.length} chars)`);
+        ? writeNamedFile(options.filename, minified)
+        : writeHashedFile(bundleName, "js", minified);
+    log("bundle", `${bundleName} -> ${filename} (${source.length}->${minified.length} chars)`);
     return filename;
 }
 

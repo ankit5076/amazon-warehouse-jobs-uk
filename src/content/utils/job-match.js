@@ -4,6 +4,14 @@
 
   if (root.AMZ_JOB_MATCH) return;
 
+  const LOCATION_FIELDS = Object.freeze([
+    'city',
+    'locationName',
+    'geoClusterDescription',
+    'state',
+    'postalCode',
+  ]);
+
   function summarizeJob(job = {}) {
     return {
       jobId: job.jobId || null,
@@ -54,8 +62,45 @@
       .filter(Boolean);
   }
 
+  function normalizeMatchingTagEntries(matchingTags = []) {
+    return matchingTags
+      .map(tag => ({
+        label: root.AMZ_TEXT?.normalizeWhitespace?.(tag) || String(tag || '').trim(),
+        normalized: normalizeForLocationMatching(tag),
+      }))
+      .filter(tag => tag.label && tag.normalized);
+  }
+
+  function getLocationCandidateEntries(job = {}, fields = LOCATION_FIELDS) {
+    return fields
+      .map(field => ({
+        field,
+        value: root.AMZ_TEXT?.normalizeWhitespace?.(job[field]) || String(job[field] || '').trim(),
+        normalized: normalizeForLocationMatching(job[field]),
+      }))
+      .filter(candidate => candidate.value && candidate.normalized);
+  }
+
   function candidateMatchesAnyTag(candidate, normalizedTags) {
     return Boolean(candidate && normalizedTags.some(tag => candidate.includes(tag)));
+  }
+
+  function findMatchingLocation(job = {}, matchingTags = [], fields = LOCATION_FIELDS) {
+    const normalizedTags = normalizeMatchingTagEntries(matchingTags);
+    if (!normalizedTags.length) return null;
+
+    const candidates = getLocationCandidateEntries(job, fields);
+    for (const candidate of candidates) {
+      const matchedTag = normalizedTags.find(tag => candidate.normalized.includes(tag.normalized));
+      if (matchedTag) {
+        return {
+          tag: matchedTag.label,
+          field: candidate.field,
+          value: candidate.value,
+        };
+      }
+    }
+    return null;
   }
 
   function cityMatchesTags(job = {}, matchingTags = []) {
@@ -90,7 +135,7 @@
 
   function jobMatchesSelectedTypes(job = {}, selectedJobTypes = []) {
     return root.AMZ_RUNTIME_CONTROLS.jobMatchesSelectedTypes(
-      [job?.jobType, job?.jobTypeL10N],
+      [job?.jobType, job?.jobTypeL10N, job?.employmentType, job?.employmentTypeL10N],
       selectedJobTypes
     );
   }
@@ -103,6 +148,7 @@
     return {
       job: summarizeJob(job),
       locationCandidates: getLocationCandidates(job),
+      matchedLocation: locationMatched ? findMatchingLocation(job, matchingTags) : null,
       cityMatched,
       fallbackLocationMatched: fallbackMatched,
       locationMatched,
@@ -166,14 +212,19 @@
       storedTags,
       matchingTags,
       matchedJob,
+      matchedLocation: matchedJob ? findMatchingLocation(matchedJob, matchingTags) : null,
     };
   }
 
   function buildLastMatchedJobMetadata(matchedJob, options = {}) {
+    const matchedLocation = options.matchedLocation || {};
     return {
       matchedAt: root.AMZ_TIME?.nowIstIso?.() || new Date().toISOString(),
       selectedCity: options.selectedCity || '',
       cityTags: options.matchingTags || [],
+      matchedLocation: matchedLocation.tag || matchedLocation.value || '',
+      matchedLocationField: matchedLocation.field || '',
+      matchedLocationValue: matchedLocation.value || '',
       distance: options.distance || '',
       selectedJobTypes: options.selectedJobTypes || [],
       country: options.country || null,
@@ -187,6 +238,7 @@
     buildMatchDiagnostics,
     cityMatchesTags,
     fallbackLocationMatchesTags,
+    findMatchingLocation,
     findMatchingJob,
     getLocationCandidates,
     getMatchingTags,

@@ -1,10 +1,9 @@
-/* Popup controller: paid license gate plus local booking settings. */
+/* Popup controller: local booking settings. */
 document.addEventListener('DOMContentLoaded', async () => {
   'use strict';
 
   const {
     BACKEND,
-    LOGGING,
     MESSAGE_ACTIONS,
     POPUP,
     RESET_DEFAULTS,
@@ -14,34 +13,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const storage = globalThis.AMZ_STORAGE;
   const account = globalThis.AMZ_ACCOUNT;
   const runtimeControlUtils = globalThis.AMZ_RUNTIME_CONTROLS;
-  const licenseState = globalThis.AMZ_LICENSE_STATE;
-  const licenseApi = globalThis.AMZ_LICENSE_API;
-  const log = globalThis.AMZ_LOGGER.create('[popup]', {
-    workflow: 'popup-settings',
-    source: 'popup/content.js',
-  });
-  const USER_LOG_OPTIONS = Object.freeze({});
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
 
   document.getElementById('version').innerText = '(version v' + storage.getManifestVersion() + ')';
 
   let runtimeControls = BACKEND.FALLBACK_DEFAULTS;
   let cityCoordinates = runtimeControls.cityCoordinates || {};
   let resetInProgress = false;
-  let currentLicense = null;
-  let licenseRefreshPromise = null;
 
   const elements = {
     city: document.getElementById('city'),
     distance: document.getElementById('distance'),
     jobType: document.getElementById('jobType'),
+    jobTypeChoices: document.getElementById('job-type-options'),
     activate: document.getElementById('activate'),
-    logMode: document.getElementById('log_mode'),
     intervalValue: document.getElementById('fetch_interval_value'),
     intervalUnit: document.getElementById('fetch_interval_unit'),
-    checkoutButton: document.getElementById('checkout_btn'),
-    checkoutProButton: document.getElementById('checkout_pro_btn'),
-    licenseStatus: document.getElementById('license-status'),
-    accessStatusPill: document.getElementById('access-status-pill'),
+    amazonEmailDisplay: document.getElementById('amazon-email-display'),
     authenticatedSections: Array.from(document.querySelectorAll('[data-authenticated-section]')),
     addAllCitiesButton: document.getElementById('add-all-cities'),
     cityScopeStatus: document.getElementById('city-scope-status'),
@@ -54,24 +49,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   function normalizeEmail(value) {
-    return licenseState.normalizeEmail(value);
+    return String(value || '').trim().toLowerCase();
   }
 
-  function isValidEmail(value) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
-  }
-
-  function setUsernameError(message) {
-    if (message) setLicenseStatus(message, 'error');
-  }
-
-  function setLicenseStatus(message, tone = '') {
-    if (!elements.licenseStatus) return;
-    elements.licenseStatus.textContent = message || '';
-    elements.licenseStatus.className = ['license-status', tone].filter(Boolean).join(' ');
-  }
-
-  function setPaidUiEnabled() {
+  function setBookingUiEnabled() {
     document.body?.classList.toggle('auth-complete', true);
     document.body?.classList.toggle('auth-required', false);
     elements.authenticatedSections.forEach(section => {
@@ -79,42 +60,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  function formatLicenseMessage(license) {
-    if (!license) return 'Search is free. Paid access unlocks unlimited booking.';
-    if (license.isProUser) {
-      return license.accessExpiresAt ? `Unlimited booking active until ${new Date(license.accessExpiresAt).toLocaleDateString()}.` : 'Unlimited booking active.';
-    }
-    return license.message || 'Search is free. Buy access to book matched jobs.';
+  function currentAmazonEmail() {
+    return normalizeEmail(elements.amazonEmailDisplay?.dataset?.email || '');
   }
 
-  function formatAccessDate(value) {
-    const date = new Date(value || '');
-    if (!Number.isFinite(date.getTime())) return '';
-    return date.toLocaleDateString();
+  function sameEmail(left, right) {
+    return normalizeEmail(left) === normalizeEmail(right);
   }
 
-  function accessPillState(license) {
-    if (!license) {
-      return { text: 'Access unknown', tone: 'unknown' };
-    }
-    if (licenseState.isAllowedState(license) && licenseState.isFresh(license)) {
-      const date = formatAccessDate(license.accessExpiresAt);
-      return {
-        text: date ? `Access active until ${date}` : 'Access active',
-        tone: 'success',
-      };
-    }
-    if (license.checkFailed === true) {
-      return { text: 'Check failed', tone: 'error' };
-    }
-    return { text: 'No active access', tone: 'warning' };
-  }
-
-  function updateAccessStatusPill(license) {
-    if (!elements.accessStatusPill) return;
-    const state = accessPillState(license);
-    elements.accessStatusPill.textContent = state.text;
-    elements.accessStatusPill.className = ['access-status-pill', state.tone].filter(Boolean).join(' ');
+  function setAmazonEmailDisplay(email) {
+    const normalized = normalizeEmail(email);
+    if (!elements.amazonEmailDisplay) return;
+    elements.amazonEmailDisplay.dataset.email = normalized;
+    elements.amazonEmailDisplay.textContent = normalized || 'Not detected';
+    elements.amazonEmailDisplay.title = normalized || 'Open Amazon Jobs while signed in to detect the account email';
   }
 
   function normalizeSelectOption(option) {
@@ -131,6 +90,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       value,
       label: runtimeControlUtils.normalizeOptionValue(option.label) || value,
     };
+  }
+
+  function compareSelectOptions(left, right) {
+    return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' }) ||
+      left.value.localeCompare(right.value, undefined, { sensitivity: 'base' });
+  }
+
+  function normalizeUniqueOptions(options, initialSeenValues = []) {
+    const seenValues = new Set(initialSeenValues);
+    return (options || [])
+      .map(normalizeSelectOption)
+      .filter(normalized => {
+        if (!normalized || seenValues.has(normalized.value)) return false;
+        seenValues.add(normalized.value);
+        return true;
+      });
   }
 
   function populateSelect(selectElement, options, fallbackValue = '', preferredValue = '') {
@@ -165,17 +140,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     allOption.textContent = 'All cities';
     elements.city.append(allOption);
 
-    const seenValues = new Set(['']);
-    (options || []).forEach(option => {
-      const normalized = normalizeSelectOption(option);
-      if (!normalized || seenValues.has(normalized.value)) return;
-      seenValues.add(normalized.value);
-
-      const optionElement = document.createElement('option');
-      optionElement.value = normalized.value;
-      optionElement.textContent = normalized.label;
-      elements.city.append(optionElement);
-    });
+    normalizeUniqueOptions(options, [''])
+      .sort(compareSelectOptions)
+      .forEach(normalized => {
+        const optionElement = document.createElement('option');
+        optionElement.value = normalized.value;
+        optionElement.textContent = normalized.label;
+        elements.city.append(optionElement);
+      });
 
     if (allCitiesSelected === true) {
       elements.city.value = '';
@@ -197,6 +169,68 @@ document.addEventListener('DOMContentLoaded', async () => {
       .filter(Boolean);
   }
 
+  function formatJobTypeLabel(value, label = '') {
+    const displayText = String(label || value || '')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+    return displayText.replace(/\b\w/g, letter => letter.toUpperCase());
+  }
+
+  function getCheckedJobTypeValues() {
+    if (!elements.jobTypeChoices) return getSelectedValues(elements.jobType);
+    return Array.from(elements.jobTypeChoices.querySelectorAll('input[data-job-type]:checked'))
+      .map(input => input.value)
+      .filter(Boolean);
+  }
+
+  function updateJobTypeChoices(values) {
+    if (!elements.jobTypeChoices) return;
+    const selectedValues = new Set(runtimeControlUtils.normalizeJobTypeList(values));
+    Array.from(elements.jobTypeChoices.querySelectorAll('input[data-job-type]')).forEach(input => {
+      const selected = selectedValues.has(input.value);
+      input.checked = selected;
+      input.closest('.job-type-option')?.classList.toggle('selected', selected);
+    });
+  }
+
+  async function syncJobTypeChoicesToStorage() {
+    const values = getCheckedJobTypeValues();
+    setSelectedValues(elements.jobType, values);
+    await state.setJobType(values);
+  }
+
+  function renderJobTypeChoices(options) {
+    if (!elements.jobTypeChoices) return;
+    const selectedValues = new Set(getSelectedValues(elements.jobType));
+    elements.jobTypeChoices.replaceChildren();
+    const seenValues = new Set();
+    (options || []).forEach(option => {
+      const normalized = normalizeSelectOption(option);
+      if (!normalized || seenValues.has(normalized.value)) return;
+      seenValues.add(normalized.value);
+
+      const wrapper = document.createElement('label');
+      wrapper.className = 'job-type-option';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = normalized.value;
+      checkbox.dataset.jobType = normalized.value;
+      checkbox.checked = selectedValues.has(normalized.value);
+      checkbox.addEventListener('change', () => {
+        syncJobTypeChoicesToStorage().catch(error => log.error('job type update failed:', error));
+      });
+
+      const label = document.createElement('span');
+      label.textContent = formatJobTypeLabel(normalized.value, normalized.label);
+
+      wrapper.append(checkbox, label);
+      wrapper.classList.toggle('selected', checkbox.checked);
+      elements.jobTypeChoices.append(wrapper);
+    });
+  }
+
   function setSelectedValues(selectElement, values) {
     if (!selectElement) return;
     const normalizedValues = selectElement === elements.jobType
@@ -206,6 +240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     Array.from(selectElement.options || []).forEach(option => {
       option.selected = selectedValues.has(option.value);
     });
+    if (selectElement === elements.jobType) updateJobTypeChoices(normalizedValues);
   }
 
   function getAllowedSelection(options, values) {
@@ -239,6 +274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       getAllowedSelection(options, fallbackValues),
     ].find(values => values.length) || [];
     setSelectedValues(selectElement, nextValues);
+    if (selectElement === elements.jobType) renderJobTypeChoices(options);
   }
 
   function applyControls(controls, preferredValues = {}) {
@@ -298,21 +334,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.cityScopeStatus.textContent = active ? 'All cities' : 'City specific';
       elements.cityScopeStatus.classList.toggle('active', active);
     }
-  }
-
-  function resolveLogModeFromStorage(stored = {}) {
-    if (typeof globalThis.AMZ_LOGGER?.normalizeMode === 'function') {
-      const explicitMode = stored[STORAGE_KEYS.LOG_MODE];
-      if (explicitMode) return globalThis.AMZ_LOGGER.normalizeMode(explicitMode);
-      return globalThis.AMZ_LOGGER.normalizeMode(LOGGING.DEFAULT_MODE);
-    }
-    return LOGGING.DEFAULT_MODE;
-  }
-
-  function setLogModeUi(value) {
-    const mode = resolveLogModeFromStorage({ [STORAGE_KEYS.LOG_MODE]: value });
-    if (elements.logMode) elements.logMode.value = mode;
-    globalThis.AMZ_LOGGER?.setMode?.(mode);
   }
 
   function getIntervalDefaultValueForUnit(unit) {
@@ -375,119 +396,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     await tagManager.renderFromStorage();
   }
 
-  function popupIdentity() {
-    return {
-      emailId: '',
-      amazonEmailId: '',
-    };
-  }
-
-  async function storedOrPopupIdentity() {
-    const stored = await licenseState.getStoredEmails();
-    return {
-      emailId: stored.emailId,
-      amazonEmailId: stored.amazonEmailId,
-    };
-  }
-
-  async function getResetPreservedCredentials() {
-    if (typeof state.getResetPreservedCredentials === 'function') {
-      return state.getResetPreservedCredentials();
+  async function getActiveTabUrl() {
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      return activeTab?.url || '';
+    } catch (_) {
+      return '';
     }
-    return {};
+  }
+
+  function isAmazonAuthPage(url) {
+    try {
+      return new URL(url).hostname === 'auth.hiring.amazon.com';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function getStoredAmazonEmail() {
+    const stored = await storage.getLocal([
+      STORAGE_KEYS.AMAZON_LOGIN_USERNAME,
+      STORAGE_KEYS.USER_EMAIL,
+    ]);
+    return normalizeEmail(
+      stored[STORAGE_KEYS.AMAZON_LOGIN_USERNAME] ||
+      stored[STORAGE_KEYS.USER_EMAIL] ||
+      ''
+    );
+  }
+
+  async function clearIdentityForNoAuthSessionIfNeeded() {
+    const activeUrl = await getActiveTabUrl();
+    if (!isAmazonAuthPage(activeUrl)) return false;
+    setAmazonEmailDisplay('');
+    await refreshActivationGate();
+    return true;
   }
 
   async function refreshActivationGate() {
-    const licenseAllowed = licenseState.isAllowedState(currentLicense) && licenseState.isFresh(currentLicense);
-
-    setPaidUiEnabled();
+    setBookingUiEnabled();
     if (elements.activate) {
       elements.activate.disabled = false;
       elements.activate.title = '';
     }
-    if (elements.checkoutButton) {
-      elements.checkoutButton.disabled = false;
-      elements.checkoutButton.hidden = false;
-    }
-    if (elements.checkoutProButton) {
-      elements.checkoutProButton.disabled = false;
-      elements.checkoutProButton.hidden = false;
-    }
-    setLicenseStatus(formatLicenseMessage(currentLicense), licenseAllowed ? 'success' : 'warning');
-    updateAccessStatusPill(currentLicense);
-  }
-
-  async function refreshLicense(options = {}) {
-    const identity = await storedOrPopupIdentity();
-    if (options.email || options.amazonEmailId) {
-      identity.amazonEmailId = normalizeEmail(options.amazonEmailId || options.email);
-    }
-    if (!isValidEmail(identity.amazonEmailId)) {
-      currentLicense = null;
-      await refreshActivationGate();
-      return null;
-    }
-    if (licenseRefreshPromise) {
-      const state = await licenseRefreshPromise;
-      await refreshActivationGate();
-      return state;
-    }
-    if (elements.validateButton) {
-      elements.validateButton.disabled = true;
-      elements.validateButton.innerText = 'Validating...';
-    }
-    licenseRefreshPromise = licenseState.refresh(identity, { allowCache: options.allowCache !== false })
-      .then(state => {
-        currentLicense = state;
-        setLicenseStatus(formatLicenseMessage(currentLicense), licenseState.isAllowedState(currentLicense) ? 'success' : 'warning');
-        return currentLicense;
-      })
-      .catch(error => {
-        currentLicense = null;
-        setLicenseStatus(error?.message || 'Unable to validate license.', 'error');
-        return null;
-      });
-    try {
-      return await licenseRefreshPromise;
-    } finally {
-      licenseRefreshPromise = null;
-      if (elements.validateButton) elements.validateButton.innerText = 'Validate';
-      await refreshActivationGate();
-    }
-  }
-
-  async function startCheckout(plan = 'access', button = elements.checkoutButton) {
-    const purchaseType = button?.dataset?.plan === 'pro' || plan === 'pro' ? 'pro' : 'access';
-    const originalText = button?.innerText || '';
-    if (button) {
-      button.disabled = true;
-      button.innerText = 'Opening...';
-    }
-    try {
-      const identity = await licenseState.getStoredEmails();
-      const response = await licenseApi.createCheckout({
-        ...identity,
-        purchaseType,
-      });
-      const checkoutUrl = response.checkoutUrl;
-      if (!checkoutUrl) throw new Error(response.message || 'Unable to start checkout.');
-      await openCheckoutUrl(checkoutUrl);
-    } catch (error) {
-      setLicenseStatus(error?.message || 'Unable to start checkout.', 'error');
-    } finally {
-      if (button) {
-        button.innerText = originalText || (purchaseType === 'pro' ? 'Go Pro' : 'Get 30 days');
-      }
-      await refreshActivationGate();
-    }
-  }
-
-  async function openCheckoutUrl(checkoutUrl) {
-    if (chrome?.tabs?.create) {
-      await chrome.tabs.create({ url: checkoutUrl });
-      return;
-    }
-    window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
   }
 
   async function notifyActiveTab(active) {
@@ -501,12 +452,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function applyStoredState() {
-    const [stored, savedEmail, cachedLicense] = await Promise.all([
+    const clearedForNoAuthSession = await clearIdentityForNoAuthSessionIfNeeded();
+    const [stored, savedEmail] = await Promise.all([
       state.getPopupFormState(),
-      licenseState.getStoredEmails(),
-      licenseState.loadCachedState(),
+      getStoredAmazonEmail(),
     ]);
-    currentLicense = cachedLicense;
+    if (!clearedForNoAuthSession) setAmazonEmailDisplay(savedEmail);
 
     const selectedCity = stored[STORAGE_KEYS.SELECTED_CITY] || '';
     const allCitiesSelected =
@@ -528,25 +479,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateAllCitiesUi(allCitiesSelected);
     setSelectedValues(elements.jobType, savedJobType);
     if (elements.activate) elements.activate.checked = stored[STORAGE_KEYS.ACTIVE] === true;
-    setLogModeUi(resolveLogModeFromStorage(stored));
     if (elements.intervalValue) elements.intervalValue.value = intervalValue;
     if (elements.intervalUnit) elements.intervalUnit.value = intervalUnit;
     await tagManager.renderFromStorage();
     if (!allCitiesSelected) await syncCoordinatesForCity(selectedCity);
     await refreshActivationGate();
-
-    if (savedEmail.amazonEmailId) {
-      await refreshLicense({ amazonEmailId: savedEmail.amazonEmailId, allowCache: false });
-    }
   }
 
   async function applyLiveStorageChange(changes, areaName) {
     if (areaName !== 'local' || resetInProgress) return;
     let shouldRenderTags = false;
 
-    if (changes[STORAGE_KEYS.LICENSE_STATE]) {
-      currentLicense = changes[STORAGE_KEYS.LICENSE_STATE].newValue || null;
-      await refreshActivationGate();
+    if (changes[STORAGE_KEYS.AMAZON_LOGIN_USERNAME] || changes[STORAGE_KEYS.USER_EMAIL]) {
+      const previousEmail = currentAmazonEmail();
+      const email = normalizeEmail(
+        changes[STORAGE_KEYS.AMAZON_LOGIN_USERNAME]?.newValue ||
+        changes[STORAGE_KEYS.USER_EMAIL]?.newValue ||
+        ''
+      );
+      setAmazonEmailDisplay(email);
+      if (!sameEmail(previousEmail, email)) await refreshActivationGate();
     }
     if (changes[STORAGE_KEYS.SELECTED_CITY] && elements.city) {
       elements.city.value = changes[STORAGE_KEYS.SELECTED_CITY].newValue || '';
@@ -570,9 +522,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (changes[STORAGE_KEYS.ACTIVE] && elements.activate) {
       elements.activate.checked = changes[STORAGE_KEYS.ACTIVE].newValue === true;
-    }
-    if (changes[STORAGE_KEYS.LOG_MODE] && elements.logMode) {
-      setLogModeUi(changes[STORAGE_KEYS.LOG_MODE].newValue);
     }
     if (changes[STORAGE_KEYS.CITY_TAGS]) shouldRenderTags = true;
     if (shouldRenderTags) await tagManager.renderFromStorage();
@@ -612,7 +561,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.setDistance(event.target.value);
   });
   elements.jobType?.addEventListener('change', event => {
-    state.setJobType(getSelectedValues(event.target));
+    const values = getSelectedValues(event.target);
+    updateJobTypeChoices(values);
+    state.setJobType(values);
   });
   elements.intervalValue?.addEventListener('change', event => {
     const normalizedValue = normalizeIntervalValueForUnit(event.target.value, elements.intervalUnit?.value);
@@ -624,13 +575,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const defaultValue = getIntervalDefaultValueForUnit(unit);
     if (elements.intervalValue) elements.intervalValue.value = defaultValue;
     await state.setFetchInterval(unit, defaultValue);
-  });
-
-  elements.logMode?.addEventListener('change', async event => {
-    const mode = resolveLogModeFromStorage({ [STORAGE_KEYS.LOG_MODE]: event.target.value });
-    globalThis.AMZ_LOGGER?.setMode?.(mode);
-    await storage.setLocal({ [STORAGE_KEYS.LOG_MODE]: mode });
-    log.info('log mode changed', { mode }, USER_LOG_OPTIONS);
   });
 
   elements.addAllCitiesButton?.addEventListener('click', async () => {
@@ -647,14 +591,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await state.setJobType(jobTypes);
   });
 
-  elements.checkoutButton?.addEventListener('click', () => {
-    startCheckout('access', elements.checkoutButton).catch(error => log.error('checkout failed:', error));
-  });
-
-  elements.checkoutProButton?.addEventListener('click', () => {
-    startCheckout('pro', elements.checkoutProButton).catch(error => log.error('checkout failed:', error));
-  });
-
   elements.activate?.addEventListener('change', async event => {
     if (!event.target.checked) {
       const active = await state.setActive(false);
@@ -665,7 +601,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const active = await state.setActive(true);
     event.target.checked = active;
     await notifyActiveTab(active);
-    log.info('automation active setting changed', { active }, USER_LOG_OPTIONS);
   });
 
   elements.refreshForm?.addEventListener('submit', async event => {
@@ -674,8 +609,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       elements.refreshButton.disabled = true;
       elements.refreshButton.innerText = 'Refreshing...';
     try {
-      const identity = await storedOrPopupIdentity();
-      if (identity.amazonEmailId) await refreshLicense({ allowCache: false });
       await syncRuntimeControlsToStorage();
       elements.refreshButton.classList.add('btn-success');
       elements.refreshButton.innerText = 'Success';
@@ -696,31 +629,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       resetInProgress = true;
-      const [licenseEmails, preserved] = await Promise.all([
-        licenseState.getStoredEmails(),
-        getResetPreservedCredentials(),
-      ]);
       const resetValues = {
         ...RESET_DEFAULTS,
-        [STORAGE_KEYS.LICENSE_BUYER_EMAIL]: licenseEmails.emailId,
-        [STORAGE_KEYS.LICENSE_AMAZON_EMAIL]: licenseEmails.amazonEmailId,
-        [STORAGE_KEYS.LICENSE_EMAIL]: licenseEmails.amazonEmailId,
-        [STORAGE_KEYS.OPERATOR_USERNAME]: licenseEmails.amazonEmailId,
-        [STORAGE_KEYS.USER_EMAIL]: licenseEmails.emailId || licenseEmails.amazonEmailId,
+        [STORAGE_KEYS.USER_EMAIL]: '',
       };
-      if (preserved[STORAGE_KEYS.AMAZON_LOGIN_USERNAME]) {
-        resetValues[STORAGE_KEYS.AMAZON_LOGIN_USERNAME] = preserved[STORAGE_KEYS.AMAZON_LOGIN_USERNAME];
-      }
-      if (preserved[STORAGE_KEYS.PASSWORD]) {
-        resetValues[STORAGE_KEYS.PASSWORD] = preserved[STORAGE_KEYS.PASSWORD];
-      }
 
       await state.resetLocal(resetValues);
-      currentLicense = null;
       if (elements.city) elements.city.value = RESET_DEFAULTS[STORAGE_KEYS.SELECTED_CITY];
       if (elements.distance) elements.distance.value = RESET_DEFAULTS[STORAGE_KEYS.DISTANCE];
       setSelectedValues(elements.jobType, RESET_DEFAULTS[STORAGE_KEYS.JOB_TYPE]);
-      setLogModeUi(RESET_DEFAULTS[STORAGE_KEYS.LOG_MODE]);
       if (elements.intervalValue) elements.intervalValue.value = RESET_DEFAULTS[STORAGE_KEYS.FETCH_INTERVAL_VALUE];
       if (elements.intervalUnit) elements.intervalUnit.value = RESET_DEFAULTS[STORAGE_KEYS.FETCH_INTERVAL_UNIT];
       if (elements.activate) elements.activate.checked = false;

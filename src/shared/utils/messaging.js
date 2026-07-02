@@ -4,13 +4,14 @@
 
   if (root.AMZ_MESSAGING) return;
 
-  const log = root.AMZ_LOGGER?.create?.('[messaging]', {
-    workflow: 'extension-messaging',
-    source: 'shared/utils/messaging.js',
-  }) || Object.assign(() => {}, {
-    debug: () => {},
-    warn: () => {},
-  });
+  const log = (...args) => console.log(...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => console.info(...args);
+  log.warn = (...args) => console.warn(...args);
+  log.error = (...args) => console.error(...args);
+  log.debug = (...args) => console.debug(...args);
+  log.trace = (...args) => console.debug(...args);
 
   function normalizeError(error, fallback = 'message failed') {
     if (!error) return fallback;

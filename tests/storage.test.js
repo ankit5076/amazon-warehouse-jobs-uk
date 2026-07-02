@@ -16,8 +16,8 @@ describe("AMZ_STORAGE", () => {
     it("filters optional undefined keys before reading local storage", async () => {
         globalThis.chrome.storage.local.get = vi.fn(() => Promise.resolve({}));
 
-        await globalThis.AMZ_STORAGE.getLocal(["licenseEmail", undefined, "", "userEmail"]);
+        await globalThis.AMZ_STORAGE.getLocal(["amazonLoginEmail", undefined, "", "userEmail"]);
 
-        expect(globalThis.chrome.storage.local.get).toHaveBeenCalledWith(["licenseEmail", "userEmail"]);
+        expect(globalThis.chrome.storage.local.get).toHaveBeenCalledWith(["amazonLoginEmail", "userEmail"]);
     });
 });

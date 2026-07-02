@@ -15,16 +15,11 @@
       "js": [
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/messaging.js",
         "content/utils/dom.js",
-        "content/utils/application-observability.js",
         "content/utils/alerts.js",
         "content/createapp.js"
       ],
@@ -43,12 +38,8 @@
       "js": [
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",
@@ -59,8 +50,7 @@
         "content/utils/page-refresh.js",
         "vendor/sweetalert.js",
         "content/utils/dom.js",
-        "content/utils/application-observability.js",
-        "content/utils/identity.js",
+        "content/login.js",
         "content/utils/toasts.js",
         "content/utils/alerts.js",
         "content/utils/job-search.js",
@@ -78,18 +68,10 @@
     }
   ],
   "description": "Amazon Warehouse UK — automatically books UK Amazon warehouse shifts as soon as a matching slot opens.",
-  "externally_connectable": {
-    "matches": [
-      "https://www.jobsatamazon.co.uk/*",
-      "https://jobsatamazon.co.uk/*",
-      "*://auth.hiring.amazon.com/*"
-    ]
-  },
   "host_permissions": [
     "https://www.jobsatamazon.co.uk/*",
     "https://jobsatamazon.co.uk/*",
-    "*://auth.hiring.amazon.com/*",
-    "https://getslotnow.com/*"
+    "*://auth.hiring.amazon.com/*"
   ],
   "icons": {
     "16": "assets/images/uk-flag.png",
@@ -103,7 +85,7 @@
   "permissions": [
     "tabs",
     "storage",
-    "activeTab",
+    "cookies",
     "declarativeContent",
     "scripting"
   ],
@@ -120,13 +102,9 @@
         "assets/sounds/alert_long.wav",
         "shared/constants.js",
         "shared/utils/time.js",
-        "shared/utils/logger.js",
         "shared/utils/messaging.js",
         "shared/utils/text.js",
         "shared/utils/storage.js",
-        "shared/utils/license-api.js",
-        "shared/utils/license-state.js",
-        "shared/utils/payment-gate.js",
         "shared/utils/url.js",
         "shared/utils/city-tags.js",
         "shared/utils/intervals.js",

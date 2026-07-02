@@ -52,7 +52,6 @@
     STORAGE_KEYS.FETCH_INTERVAL_VALUE,
     STORAGE_KEYS.FETCH_INTERVAL_UNIT,
     STORAGE_KEYS.FETCH_INTERVAL_MIN_MS,
-    STORAGE_KEYS.LOG_MODE,
   ]);
 
   function normalizeAuthProbeStatus(value) {
@@ -120,7 +119,7 @@
       [STORAGE_KEYS.LATITUDE]: null,
       [STORAGE_KEYS.LONGITUDE]: null,
       [STORAGE_KEYS.DISTANCE]: runtimeControls.getAllCitiesDistanceKm(),
-      [STORAGE_KEYS.CITY_TAGS]: Array.isArray(tags) ? tags : [],
+      [STORAGE_KEYS.CITY_TAGS]: cityTags.sortCityTags(Array.isArray(tags) ? tags : []),
     });
   }
 
@@ -152,7 +151,7 @@
 
   async function setCityTags(tags) {
     await storage.setLocal({
-      [STORAGE_KEYS.CITY_TAGS]: Array.isArray(tags) ? tags : [],
+      [STORAGE_KEYS.CITY_TAGS]: cityTags.sortCityTags(Array.isArray(tags) ? tags : []),
     });
   }
 

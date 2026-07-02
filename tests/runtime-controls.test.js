@@ -156,6 +156,12 @@ describe("AMZ_RUNTIME_CONTROLS", () => {
         expect(controls.jobMatchesSelectedTypes("FLEX_TIME;FULL_TIME", ["FULL_TIME"])).toBe(true);
         expect(controls.jobMatchesSelectedTypes("FLEX_TIME;FULL_TIME", ["PART_TIME"])).toBe(false);
         expect(controls.jobMatchesSelectedTypes("FLEX_TIME;FULL_TIME", [])).toBe(true);
+        expect(controls.jobMatchesSelectedTypes("", [
+            "FULL_TIME",
+            "PART_TIME",
+            "FLEX_TIME",
+            "REDUCED_TIME",
+        ])).toBe(true);
     });
 
     it("builds storage updates while respecting missing-only keys", () => {

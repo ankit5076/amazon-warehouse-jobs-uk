@@ -3,23 +3,23 @@
 ## Data Collection Disclosure
 
 ```text
-The extension collects buyer/contact email and Amazon job-search email for paid access validation. It reads supported Amazon hiring pages to match job listings and continue the booking/application flow. It communicates with getslotnow.com for license checks, checkout creation, and access validation. Payment is handled by Dodo hosted checkout. The extension does not sell user data and does not call Supabase directly.
+The extension reads supported Amazon UK hiring pages to match job listings and continue the booking/application flow. It may store the Amazon job-search email locally to prefill the Amazon login prompt. The extension does not sell user data, does not call a payment backend, and does not store an Amazon password or PIN.
 ```
 
 ## Permission Justification
 
 ```text
-This extension needs access to Amazon hiring pages to detect available warehouse job listings, match the user's selected search criteria, and continue the booking/application flow only after the user has valid paid access. Storage is used to save local extension preferences and the cached access state. Tabs/activeTab/scripting are used to coordinate the popup with the active Amazon hiring tab.
+This extension needs access to Amazon UK hiring pages to detect available warehouse job listings, match the user's selected search criteria, and continue the booking/application flow. Storage is used to save local extension preferences and the remembered Amazon email. Tabs, scripting, and declarativeContent are used to coordinate the popup with the active Amazon hiring tab and inject booking helpers on supported pages only. The cookies permission is used only to sign out of Amazon Hiring when the extension must return an unauthorized session to the login page.
 ```
 
 ## Host Permission Justification
 
 ```text
-Amazon hiring host permissions are required because the extension operates only on Amazon job-search and application pages for the UK. getslotnow.com is required for paid access validation and checkout creation.
+Amazon UK hiring host permissions are required because the extension operates only on Amazon UK job-search, authentication, and application pages.
 ```
 
 ## Paid Feature Disclosure
 
 ```text
-The extension requires paid access. Checkout is hosted by Dodo. The extension supports 30-day access and annual/pro access. Access is tied to the Amazon job-search email entered during checkout.
+This build does not include paid access or checkout. Payment integration is planned for a later tracker-service-backed release.
 ```

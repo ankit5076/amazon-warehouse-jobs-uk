@@ -77,7 +77,6 @@ function reloadAuthProbe(url) {
         "AMZ_CITY_TAGS",
         "AMZ_RUNTIME_CONTROLS",
         "AMZ_STATE",
-        "AMZ_LOGGER",
         "AMZ_URL",
         "AMZ_AUTH_PROBE",
     ]);
@@ -88,7 +87,6 @@ function reloadAuthProbe(url) {
         "shared/utils/city-tags.js",
         "shared/utils/runtime-controls.js",
         "shared/utils/state-store.js",
-        "shared/utils/logger.js",
         "shared/utils/url.js",
         "content/utils/auth-probe.js",
     ]);
@@ -110,7 +108,6 @@ describe("AMZ_AUTH_PROBE", () => {
             "AMZ_CITY_TAGS",
             "AMZ_RUNTIME_CONTROLS",
             "AMZ_STATE",
-            "AMZ_LOGGER",
             "AMZ_URL",
             "AMZ_AUTH_PROBE",
         ]);
@@ -150,5 +147,23 @@ describe("AMZ_AUTH_PROBE", () => {
         expect(globalThis.AMZ_AUTH_PROBE.getLastProbeSnapshot().pageUrl)
             .toBe("https://www.jobsatamazon.co.uk/app#/jobSearch");
         expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("marks unauthorized without clearing the remembered Amazon login email", async () => {
+        const store = useLocalStore({
+            __amz_login_username: "old@example.com",
+        });
+        const fetchSpy = vi
+            .fn()
+            .mockResolvedValueOnce(jsonResponse(200, { token: "csrf-token" }))
+            .mockResolvedValueOnce(jsonResponse(401, { message: "Unauthorized" }));
+        globalThis.fetch = fetchSpy;
+        reloadAuthProbe("https://www.jobsatamazon.co.uk/app#/jobSearch");
+        const { AUTH_PROBE, STORAGE_KEYS } = globalThis.AMZ_CONSTANTS;
+
+        await globalThis.AMZ_AUTH_PROBE.ready;
+
+        expect(store[STORAGE_KEYS.AUTH_PROBE_STATUS]).toBe(AUTH_PROBE.STATUSES.NOT_AUTHENTICATED);
+        expect(store[STORAGE_KEYS.AMAZON_LOGIN_USERNAME]).toBe("old@example.com");
     });
 });

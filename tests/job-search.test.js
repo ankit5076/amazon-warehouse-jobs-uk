@@ -72,6 +72,15 @@ function buildUkAllCitiesHarShape() {
     return {
         locale: "en-GB",
         country: "United Kingdom",
+        keyWords: "",
+        equalFilters: [],
+        containFilters: [{
+            key: "isPrivateSchedule",
+            val: ["true", "false"],
+        }],
+        rangeFilters: [],
+        orFilters: [],
+        dateFilters: [],
         pageSize: 100,
         sorters: MAX_PAY_SORTER,
         consolidateSchedule: true,
@@ -325,7 +334,7 @@ describe("AMZ_JOB_SEARCH", () => {
         }
     });
 
-    it("omits geo and filter clauses for all-cities searches", () => {
+    it("omits only geo clauses for all-cities searches", () => {
         const body = globalThis.AMZ_JOB_SEARCH.buildRequestBody({
             lat: "48.650629",
             lng: "-123.398604",
@@ -338,12 +347,15 @@ describe("AMZ_JOB_SEARCH", () => {
 
         if (globalThis.AMZ_CONSTANTS.AMAZON.COUNTRY_CONFIG.search.supportsAllCitiesSearch === true) {
             expect(request.geoQueryClause).toBeUndefined();
-            expect(request.keyWords).toBeUndefined();
-            expect(request.equalFilters).toBeUndefined();
-            expect(request.containFilters).toBeUndefined();
-            expect(request.rangeFilters).toBeUndefined();
-            expect(request.orFilters).toBeUndefined();
-            expect(request.dateFilters).toBeUndefined();
+            expect(request.keyWords).toBe("");
+            expect(request.equalFilters).toEqual([]);
+            expect(request.containFilters).toEqual([{
+                key: "isPrivateSchedule",
+                val: ["true", "false"],
+            }]);
+            expect(request.rangeFilters).toEqual([]);
+            expect(request.orFilters).toEqual([]);
+            expect(request.dateFilters).toEqual([]);
             expect(request.consolidateSchedule).toBe(true);
             expect(request.sorters).toEqual(MAX_PAY_SORTER);
         } else {
@@ -370,6 +382,47 @@ describe("AMZ_JOB_SEARCH", () => {
 
         expect(request).toEqual(buildUkAllCitiesHarShape());
         expect(request.geoQueryClause).toBeUndefined();
+    });
+
+    it("uses the website no-geo shape when selected city has additional city tags", () => {
+        const body = globalThis.AMZ_JOB_SEARCH.buildRequestBody({
+            lat: "51.507218",
+            lng: "-0.127586",
+            distance: "150",
+            selectedCity: "London",
+            allCitiesSelected: false,
+            cityTags: ["London", "Edinburgh"],
+            jobType: ["FULL_TIME"],
+        });
+        const request = body.variables.searchJobRequest;
+
+        expect(request).toEqual(buildUkAllCitiesHarShape());
+        expect(request.geoQueryClause).toBeUndefined();
+        expect(findJobTypeFilter(request)).toBeUndefined();
+    });
+
+    it("keeps geo search when the selected city is the only location target", () => {
+        const body = globalThis.AMZ_JOB_SEARCH.buildRequestBody({
+            lat: "51.507218",
+            lng: "-0.127586",
+            distance: "150",
+            selectedCity: "London",
+            allCitiesSelected: false,
+            cityTags: ["London"],
+            jobType: [],
+        });
+        const request = body.variables.searchJobRequest;
+
+        expect(request.geoQueryClause).toEqual({
+            lat: 51.507218,
+            lng: -0.127586,
+            unit: "mi",
+            distance: 150,
+        });
+        expect(request.containFilters).toEqual([{
+            key: "isPrivateSchedule",
+            val: ["true", "false"],
+        }]);
     });
 
     it("matches the official UK schedule GraphQL request shape for a known job", () => {
@@ -573,6 +626,7 @@ describe("AMZ_JOB_SEARCH", () => {
             country: globalThis.AMZ_CONSTANTS.AMAZON.COUNTRY_CONFIG.country,
             locale: globalThis.AMZ_CONSTANTS.AMAZON.COUNTRY_CONFIG.locale,
             allCitiesSearch: true,
+            noGeoLocationSearch: true,
             selectedCity: null,
             selectedJobTypes: ["PART_TIME"],
             cityTagCount: 2,
@@ -598,7 +652,10 @@ describe("AMZ_JOB_SEARCH", () => {
 
         expect(request.geoQueryClause).toBeUndefined();
         expect(findJobTypeFilter(request)).toBeUndefined();
-        expect(request.containFilters).toBeUndefined();
+        expect(request.containFilters).toEqual([{
+            key: "isPrivateSchedule",
+            val: ["true", "false"],
+        }]);
         expect(request.consolidateSchedule).toBe(true);
     });
 

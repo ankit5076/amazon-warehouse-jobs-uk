@@ -8,18 +8,6 @@ async function tick() {
     }
 }
 
-function createTestLogger() {
-    const log = vi.fn();
-    log.event = log;
-    log.log = log;
-    log.info = vi.fn();
-    log.warn = vi.fn();
-    log.error = vi.fn();
-    log.debug = vi.fn();
-    log.trace = vi.fn();
-    return log;
-}
-
 function getParamFromUrl(url, key) {
     const parsed = new URL(url);
     const hashQuery = parsed.hash.includes("?") ? parsed.hash.split("?")[1] : "";
@@ -27,7 +15,7 @@ function getParamFromUrl(url, key) {
 }
 
 function setupCreateAppHarness(options = {}) {
-    unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_APPLICATION_OBSERVABILITY", "__amazonCreateAppAutomation"]);
+    unloadSharedNamespaces(["AMZ_CONSTANTS", "__amazonCreateAppAutomation"]);
     loadSharedScripts(["shared/constants.js"]);
 
     const dom = new JSDOM(
@@ -65,7 +53,6 @@ function setupCreateAppHarness(options = {}) {
                 button => button.textContent.trim() === text
             ) || null,
     };
-    globalThis.AMZ_LOGGER = { create: createTestLogger };
     globalThis.AMZ_URL = {
         getJobIdFromUrl: url => getParamFromUrl(url || dom.window.location.href, "jobId") || "JOB-1",
         getScheduleIdFromUrl: url => getParamFromUrl(url || dom.window.location.href, "scheduleId"),
@@ -93,14 +80,6 @@ function setupCreateAppHarness(options = {}) {
         }),
         setLocal: vi.fn(async () => {}),
     };
-    globalThis.AMZ_PAYMENT_GATE = {
-        requireAllowed: vi.fn(async () => ({ ok: true, license: {} })),
-        recordBookingUsage: vi.fn(async () => ({ ok: true })),
-    };
-    if (options.applicationObservability) {
-        globalThis.AMZ_APPLICATION_OBSERVABILITY = options.applicationObservability;
-    }
-
     return { clickElement, dom };
 }
 
@@ -111,7 +90,7 @@ function loadCreateAppScripts() {
 describe("Create Application automation", () => {
     beforeEach(() => {
         vi.useRealTimers();
-        unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_APPLICATION_OBSERVABILITY", "__amazonCreateAppAutomation"]);
+        unloadSharedNamespaces(["AMZ_CONSTANTS", "__amazonCreateAppAutomation"]);
     });
 
     afterEach(() => {
@@ -121,12 +100,9 @@ describe("Create Application automation", () => {
         delete globalThis.MutationObserver;
         delete globalThis.requestAnimationFrame;
         delete globalThis.AMZ_DOM;
-        delete globalThis.AMZ_LOGGER;
         delete globalThis.AMZ_URL;
         delete globalThis.AMZ_STORAGE;
-        delete globalThis.AMZ_PAYMENT_GATE;
-        delete globalThis.AMZ_APPLICATION_OBSERVABILITY;
-        unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_APPLICATION_OBSERVABILITY", "__amazonCreateAppAutomation"]);
+        unloadSharedNamespaces(["AMZ_CONSTANTS", "__amazonCreateAppAutomation"]);
     });
 
     it("clicks the official pre-consent Next and consent Start Application steps once", async () => {
@@ -216,14 +192,7 @@ describe("Create Application automation", () => {
     it("clicks job opportunity, Select this job, and Accept Offer on the UK flow", async () => {
         vi.useFakeTimers();
         try {
-            const trace = {};
-            const applicationObservability = {
-                ensureApplicationTrace: vi.fn(),
-                loadPendingTrace: vi.fn(async () => trace),
-                finalizeAndFlush: vi.fn(),
-            };
             const { clickElement, dom } = setupCreateAppHarness({
-                applicationObservability,
                 url: "https://www.jobsatamazon.co.uk/application/uk/?CS=true&jobId=JOB-1&locale=en-GB&ssoEnabled=1#/job-opportunities?CS=true&jobId=JOB-1&locale=en-GB&ssoEnabled=1&applicationId=app-1",
                 html: [
                     '<div data-test-component="StencilReactCard">',
@@ -282,29 +251,8 @@ describe("Create Application automation", () => {
             );
             vi.advanceTimersByTime(rescanDelayMs);
             await tick();
-            expect(applicationObservability.loadPendingTrace).toHaveBeenCalledWith(expect.objectContaining({
-                jobId: "JOB-1",
-                scheduleId: "SCH-1",
-                applicationId: "app-1",
-            }));
-            expect(applicationObservability.finalizeAndFlush).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    applicationId: "app-1",
-                    scheduleId: "SCH-1",
-                    confirmedScheduleId: "SCH-1",
-                }),
-                "BOOKED",
-                expect.objectContaining({
-                    detailedOutcome: "CONTINGENT_OFFER_ACCEPTED",
-                    applicationId: "app-1",
-                    scheduleId: "SCH-1",
-                    confirmedScheduleId: "SCH-1",
-                    workflowStepName: "additional-information",
-                }),
-                expect.objectContaining({
-                    jobId: "JOB-1",
-                    scheduleId: "SCH-1",
-                })
+            expect(globalThis.AMZ_STORAGE.setLocal).not.toHaveBeenCalledWith(
+                expect.objectContaining({ [globalThis.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE]: false })
             );
         } finally {
             vi.useRealTimers();
@@ -331,7 +279,6 @@ describe("Create Application automation", () => {
             ]);
             expect(clickElement.mock.calls[1][2]).toEqual({
                 targetSelf: true,
-                telemetryRetry: true,
             });
             vi.advanceTimersByTime(retryDelayMs * 2);
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
@@ -363,6 +310,46 @@ describe("Create Application automation", () => {
             expect(clickElement.mock.calls.map(call => call[1])).toEqual([
                 "submit shift preferences",
             ]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("clicks Start Assessment on the assessment consent route once", async () => {
+        vi.useFakeTimers();
+        try {
+            const { clickElement } = setupCreateAppHarness({
+                url: "https://www.jobsatamazon.co.uk/application/uk/?CS=true&jobId=JOB-1&locale=en-GB&ssoEnabled=1#/assessment-consent?CS=true&jobId=JOB-1&locale=en-GB&ssoEnabled=1&applicationId=app-1",
+                html: '<button type="button"><div>Start Assessment</div></button>',
+            });
+            const rescanDelayMs = globalThis.AMZ_CONSTANTS.CREATE_APPLICATION.POST_CLICK_RESCAN_MS;
+
+            loadCreateAppScripts();
+            await tick();
+
+            expect(clickElement.mock.calls.map(call => call[1])).toEqual(["start assessment"]);
+
+            vi.advanceTimersByTime(rescanDelayMs * 3);
+            expect(clickElement.mock.calls.map(call => call[1])).toEqual(["start assessment"]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("does not click generic Continue buttons on later assessment routes", async () => {
+        vi.useFakeTimers();
+        try {
+            const { clickElement } = setupCreateAppHarness({
+                url: "https://www.jobsatamazon.co.uk/application/uk/?CS=true&jobId=JOB-1&locale=en-GB&ssoEnabled=1#/assessment?CS=true&jobId=JOB-1&locale=en-GB&ssoEnabled=1&applicationId=app-1",
+                html: '<button type="button"><div>Continue</div></button>',
+            });
+            const rescanDelayMs = globalThis.AMZ_CONSTANTS.CREATE_APPLICATION.POST_CLICK_RESCAN_MS;
+
+            loadCreateAppScripts();
+            await tick();
+            vi.advanceTimersByTime(rescanDelayMs * 4);
+
+            expect(clickElement).not.toHaveBeenCalled();
         } finally {
             vi.useRealTimers();
         }

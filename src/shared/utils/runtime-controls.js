@@ -63,6 +63,10 @@
   function jobMatchesSelectedTypes(jobTypes, selectedJobTypes) {
     const selected = normalizeJobTypeList(selectedJobTypes);
     if (selected.length === 0) return true;
+    if (CANONICAL_JOB_TYPES.size > 0 && selected.length === CANONICAL_JOB_TYPES.size) {
+      const selectedSet = new Set(selected);
+      if ([...CANONICAL_JOB_TYPES].every(jobType => selectedSet.has(jobType))) return true;
+    }
 
     const returned = normalizeJobTypeList(jobTypes);
     if (returned.length === 0) return false;

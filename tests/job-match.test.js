@@ -36,8 +36,13 @@ describe("AMZ_JOB_MATCH", () => {
         });
 
         expect(result.storedTags).toEqual(["Toronto"]);
-        expect(result.matchingTags).toEqual(["Toronto", "Sidney"]);
+        expect(result.matchingTags).toEqual(["Sidney", "Toronto"]);
         expect(result.matchedJob).toEqual(expect.objectContaining({ jobId: "JOB-2" }));
+        expect(result.matchedLocation).toEqual({
+            tag: "Sidney",
+            field: "city",
+            value: "Sidney",
+        });
     });
 
     it("matches fallback location fields when city is unavailable", () => {
@@ -64,6 +69,11 @@ describe("AMZ_JOB_MATCH", () => {
         });
 
         expect(result.matchedJob).toEqual(expect.objectContaining({ jobId: "JOB-2" }));
+        expect(result.matchedLocation).toEqual({
+            tag: "Toronto",
+            field: "locationName",
+            value: "Toronto Delivery Station",
+        });
     });
 
     it("prefers a city match before falling back to location text", () => {
@@ -108,6 +118,49 @@ describe("AMZ_JOB_MATCH", () => {
         });
 
         expect(result.matchedJob).toEqual(expect.objectContaining({ jobId: "JOB-1" }));
+    });
+
+    it("matches UK cards whose full-time value is returned as employmentTypeL10N", () => {
+        const jobs = [
+            {
+                jobId: "EDI-1",
+                city: "Edinburgh",
+                state: "BORDER",
+                jobTitle: "Customer Service Associate",
+                jobType: "",
+                jobTypeL10N: "",
+                employmentTypeL10N: "Full Time",
+            },
+        ];
+
+        const result = globalThis.AMZ_JOB_MATCH.findMatchingJob(jobs, {
+            selectedCity: "",
+            cityTags: ["Edinburgh"],
+            selectedJobTypes: ["FULL_TIME"],
+        });
+
+        expect(result.matchedJob).toEqual(expect.objectContaining({ jobId: "EDI-1" }));
+    });
+
+    it("accepts returned jobs with unknown type labels when every local type is selected", () => {
+        const jobs = [
+            {
+                jobId: "EDI-1",
+                city: "Edinburgh",
+                state: "BORDER",
+                jobTitle: "Customer Service Associate",
+                jobType: "",
+                jobTypeL10N: "",
+            },
+        ];
+
+        const result = globalThis.AMZ_JOB_MATCH.findMatchingJob(jobs, {
+            selectedCity: "",
+            cityTags: ["Edinburgh"],
+            selectedJobTypes: ["FULL_TIME", "PART_TIME", "FLEX_TIME", "REDUCED_TIME"],
+        });
+
+        expect(result.matchedJob).toEqual(expect.objectContaining({ jobId: "EDI-1" }));
     });
 
     it("builds compact diagnostics for city and job type rejection debugging", () => {
@@ -168,6 +221,11 @@ describe("AMZ_JOB_MATCH", () => {
             {
                 selectedCity: "Sidney",
                 matchingTags: ["Sidney"],
+                matchedLocation: {
+                    tag: "Sidney",
+                    field: "city",
+                    value: "Sidney",
+                },
                 distance: "150",
                 selectedJobTypes: ["FULL_TIME"],
                 country: "Canada",
@@ -180,6 +238,9 @@ describe("AMZ_JOB_MATCH", () => {
             city: "Sidney",
             selectedCity: "Sidney",
             cityTags: ["Sidney"],
+            matchedLocation: "Sidney",
+            matchedLocationField: "city",
+            matchedLocationValue: "Sidney",
             distance: "150",
             selectedJobTypes: ["FULL_TIME"],
             country: "Canada",

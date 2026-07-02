@@ -1,31 +1,24 @@
-/* Service worker event routing for paid-access automation. */
+/* Service worker event routing for Amazon booking automation. */
 globalThis.AMZ_IS_SERVICE_WORKER = true;
 
 try {
   importScripts(
     '../shared/constants.js',
     '../shared/utils/time.js',
-    '../shared/utils/logger.js',
     '../shared/utils/text.js',
     '../shared/utils/storage.js',
-    '../shared/utils/license-api.js',
-    '../shared/utils/license-state.js',
-    '../shared/utils/payment-gate.js',
     '../shared/utils/url.js',
     '../shared/utils/messaging.js',
     './tab-service.js'
   );
 } catch (error) {
-  const prefix = globalThis.AMZ_LOGGER?.formatLoggerPrefix?.('[service-worker]', {
-    workflow: 'background-routing',
-    source: 'background/service-worker.js',
-  }) || '[service-worker]';
-  globalThis.AMZ_LOGGER?.error(prefix, 'shared script load failed:', error);
+  console.error('[service-worker] shared script load failed:', error);
 }
 
 const {
   AMAZON,
   INSTALL_DEFAULTS,
+  MESSAGE_ACTIONS,
   STORAGE_KEYS,
 } = globalThis.AMZ_CONSTANTS;
 
@@ -54,6 +47,62 @@ function configureActionVisibility() {
     }]);
   });
 }
+
+function callbackPromise(run) {
+  return new Promise((resolve, reject) => {
+    try {
+      run(resolve);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function cookieUrl(cookie) {
+  const host = String(cookie.domain || '').replace(/^\./, '');
+  const rawPath = String(cookie.path || '/');
+  const path = rawPath.startsWith('/') ? rawPath : '/' + rawPath;
+  return `${cookie.secure === false ? 'http' : 'https'}://${host}${path}`;
+}
+
+async function clearAmazonSessionCookies() {
+  if (!chrome.cookies || typeof chrome.cookies.getAll !== 'function') {
+    return { removed: 0, attempted: 0 };
+  }
+
+  const domains = Array.from(new Set(AMAZON.SESSION_COOKIE_DOMAINS || []));
+  const cookieLists = await Promise.all(domains.map(domain => callbackPromise(resolve => {
+    chrome.cookies.getAll({ domain }, cookies => resolve(Array.isArray(cookies) ? cookies : []));
+  })));
+  const seen = new Set();
+  const cookies = cookieLists.flat().filter(cookie => {
+    const key = [cookie.storeId || '', cookie.domain || '', cookie.path || '', cookie.name || ''].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const removals = await Promise.all(cookies.map(cookie => callbackPromise(resolve => {
+    chrome.cookies.remove({
+      url: cookieUrl(cookie),
+      name: cookie.name,
+      storeId: cookie.storeId,
+    }, result => resolve(result || null));
+  })));
+
+  return {
+    attempted: cookies.length,
+    removed: removals.filter(Boolean).length,
+  };
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.action !== MESSAGE_ACTIONS.LOGOUT_AMAZON_SESSION) return false;
+  clearAmazonSessionCookies()
+    .then(result => sendResponse({ ok: true, ...result }))
+    .catch(error => sendResponse({ ok: false, error: error?.message || String(error) }));
+  return true;
+});
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   configureActionVisibility();

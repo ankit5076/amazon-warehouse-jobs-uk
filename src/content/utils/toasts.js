@@ -63,6 +63,52 @@
     return value || 'N/A';
   }
 
+  function normalizeLabel(value) {
+    return text.normalizeWhitespace ? text.normalizeWhitespace(value) : String(value || '').trim();
+  }
+
+  function getJobLocationLabel(job = {}) {
+    return [
+      job.city,
+      job.locationName,
+      job.geoClusterDescription,
+      job.state,
+      job.postalCode,
+    ]
+      .map(normalizeLabel)
+      .find(Boolean) || '';
+  }
+
+  function getJobLocationSummary(jobCards = [], limit = 3) {
+    const allLabels = [];
+    const seen = new Set();
+    (Array.isArray(jobCards) ? jobCards : []).forEach(job => {
+      const label = getJobLocationLabel(job);
+      const key = text.normalizeForComparison(label);
+      if (!label || seen.has(key)) return;
+      seen.add(key);
+      allLabels.push(label);
+    });
+    return {
+      labels: allLabels.slice(0, limit),
+      hiddenCount: Math.max(0, allLabels.length - limit),
+    };
+  }
+
+  function getMatchedLocationLabel(details = {}) {
+    const matchedLocation = details.matchedLocation || {};
+    return normalizeLabel(
+      matchedLocation.tag ||
+      matchedLocation.value ||
+      getJobLocationLabel(details.job) ||
+      details.city
+    );
+  }
+
+  function getMatchedLocationValue(details = {}) {
+    return normalizeLabel(details.matchedLocation?.value || getJobLocationLabel(details.job));
+  }
+
   function buildPollingToastHtml(options = {}) {
     const configuredIntervalLabel = formatInterval(options.intervalMs, options.intervalUnit);
     const effectiveIntervalLabel = formatInterval(
@@ -117,45 +163,47 @@
     });
   }
 
-  function showJobsReceivedToast(intervalMs) {
+  function showJobsReceivedToast(intervalMs, jobCards = []) {
+    const locationSummary = getJobLocationSummary(jobCards);
+    const locations = locationSummary.labels;
+    const jobCount = Array.isArray(jobCards) ? jobCards.length : 0;
+    const progressLabel = locations.length
+      ? 'Found ' + (jobCount === 1 ? 'a job' : 'jobs') + ' in ' +
+        locations.map(text.escapeHtml).join(', ') +
+        (locationSummary.hiddenCount > 0 ? ' +' + String(locationSummary.hiddenCount) + ' more' : '') +
+        '. Matching city filters...'
+      : ALERTS.MATCHING_PROGRESS_LABEL;
+
     Swal.fire({
       toast: true,
       position: 'bottom-start',
       timer: intervalMs,
       showConfirmButton: false,
       timerProgressBar: true,
-      html: '<span style="color: green;">' + text.escapeHtml(ALERTS.MATCHING_PROGRESS_LABEL) + '</span>',
+      html: '<span style="color: green;">' + progressLabel + '</span>',
     });
   }
 
-  function showJobFoundToast(city) {
+  function showJobFoundToast(input) {
+    const details = typeof input === 'object' && input !== null ? input : { city: input };
+    const locationLabel = getMatchedLocationLabel(details);
+    const locationValue = getMatchedLocationValue(details);
+    const locationDetail = locationValue && locationValue !== locationLabel
+      ? '<br><span style="font-size:0.82em;opacity:.78;">Amazon location: ' +
+        text.escapeHtml(locationValue) + '</span>'
+      : '';
+
     Swal.fire({
-      title: 'Job Matched!',
-      text: 'Matching job in ' + city,
+      title: locationLabel ? 'Job matched for ' + locationLabel : 'Job matched!',
+      html: locationLabel
+        ? 'Matching job in ' + text.escapeHtml(locationLabel) + locationDetail
+        : 'Matching job location found.',
       icon: 'success',
       timer: ALERTS.JOB_FOUND_TOAST_DURATION_MS,
       timerProgressBar: true,
       toast: true,
       position: 'top-end',
       showConfirmButton: false,
-    });
-  }
-
-  function showCreditsRequiredPopup(details = {}) {
-    const jobLine = details.city || details.jobId
-      ? '<br><span style="font-size:0.86em;opacity:.78;">' +
-        text.escapeHtml([details.city, details.jobId].filter(Boolean).join(' · ')) +
-        '</span>'
-      : '';
-
-    Swal.fire({
-      title: 'Job search is free',
-      html:
-        '<span style="font-size:0.95em;">A matching job was found, but booking requires paid access. ' +
-        'Open the extension and choose <strong>30-Day</strong> or <strong>Pro</strong> access to continue.</span>' +
-        jobLine,
-      icon: 'info',
-      confirmButtonText: 'OK',
     });
   }
 
@@ -191,7 +239,6 @@
     renderPollingToast,
     showJobsReceivedToast,
     showJobFoundToast,
-    showCreditsRequiredPopup,
     showBookingConfirmedToast,
     closePollingToast,
   });

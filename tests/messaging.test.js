@@ -2,10 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadSharedScripts, unloadSharedNamespaces } from "./_load.js";
 
 function reload() {
-    unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_LOGGER", "AMZ_MESSAGING"]);
+    unloadSharedNamespaces(["AMZ_CONSTANTS", "AMZ_MESSAGING"]);
     loadSharedScripts([
         "shared/constants.js",
-        "shared/utils/logger.js",
         "shared/utils/messaging.js",
     ]);
     globalThis.chrome.runtime.lastError = null;

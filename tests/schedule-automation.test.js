@@ -2,18 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { loadSharedScripts, unloadSharedNamespaces } from "./_load.js";
 
-function createTestLogger() {
-    const log = vi.fn();
-    log.event = log;
-    log.log = log;
-    log.info = vi.fn();
-    log.warn = vi.fn();
-    log.error = vi.fn();
-    log.debug = vi.fn();
-    log.trace = vi.fn();
-    return log;
-}
-
 const SELECT_SCHEDULE_SELECTOR = 'button[data-test-id="jobDetailSelectScheduleButton"], .jobDetailScheduleDropdown';
 const SCHEDULE_APPLY_SELECTOR = 'button[data-test-id="ScheduleCardSelectScheduleLink"]';
 const SCHEDULE_OPTION_SELECTOR = 'div[data-test-id="schedulePanel"] [data-test-component="StencilReactCard"][role="button"], div[data-test-id="schedulePanel"] [role="button"].focusableItem, div[data-test-id="schedulePanel"] .scheduleFlyoutSelection';
@@ -61,7 +49,6 @@ function setupHarness({
         isJobDetailPage: url => String(url || currentUrl).includes("#/jobDetail?jobId="),
         getJobIdFromUrl: () => "JOB-1",
     };
-    globalThis.AMZ_LOGGER = { create: createTestLogger };
     loadSharedScripts(["content/utils/schedule-automation.js"]);
 
     const automation = globalThis.AMZ_SCHEDULE_AUTOMATION.create({
@@ -95,7 +82,6 @@ describe("schedule automation", () => {
         delete globalThis.AMZ_DOM;
         delete globalThis.AMZ_STORAGE;
         delete globalThis.AMZ_URL;
-        delete globalThis.AMZ_LOGGER;
         unloadSharedNamespaces([
             "AMZ_CONSTANTS",
             "AMZ_TEXT",

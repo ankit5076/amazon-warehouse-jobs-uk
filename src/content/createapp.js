@@ -9,11 +9,19 @@
 
   const { CREATE_APPLICATION, SELECTORS } = root.AMZ_CONSTANTS;
   const dom = root.AMZ_DOM;
-  const log = root.AMZ_LOGGER.create('[create-application]', {
-    enabled: () => enabled,
-    workflow: 'create-application-ui',
-    source: 'content/createapp.js',
-  });
+  function writeLog(level, ...args) {
+    if (!enabled && ['debug', 'trace'].includes(level)) return;
+    const method = level === 'trace' ? 'debug' : level;
+    console[method](...args);
+  }
+  const log = (...args) => writeLog('log', ...args);
+  log.event = log;
+  log.log = log;
+  log.info = (...args) => writeLog('info', ...args);
+  log.warn = (...args) => writeLog('warn', ...args);
+  log.error = (...args) => writeLog('error', ...args);
+  log.debug = (...args) => writeLog('debug', ...args);
+  log.trace = (...args) => writeLog('trace', ...args);
 
   let enabled = false;
   let observer = null;
@@ -22,12 +30,11 @@
   let routeListenersInstalled = false;
   let enableRequestId = 0;
   const clickedKeys = new Set();
-  const seenTraceRoutes = new Set();
   const acceptOfferState = {
     clicked: false,
     clickedAt: 0,
     retried: false,
-    notificationSent: false,
+    confirmed: false,
   };
 
   function normalizeText(value) {
@@ -108,6 +115,15 @@
       queryElement(SELECTORS.START_APPLICATION_BUTTON),
       dom.findButtonByText(CREATE_APPLICATION.BUTTON_TEXT.START_APPLICATION),
     ]);
+  }
+
+  function findStartAssessmentButton() {
+    if (!isApplicationHashRoute('assessment-consent')) return null;
+    return dom.findButtonByText(CREATE_APPLICATION.BUTTON_TEXT.START_ASSESSMENT);
+  }
+
+  function isAssessmentRoute(route = getApplicationHashRoute()) {
+    return String(route || '').startsWith('assessment');
   }
 
   function findActiveApplicationModal() {
@@ -192,88 +208,11 @@
     return true;
   }
 
-  function trackRouteEntry() {
-    const context = getApplicationContext();
-    const key = routeSignature();
-    if (seenTraceRoutes.has(key)) return;
-    seenTraceRoutes.add(key);
-    root.AMZ_APPLICATION_OBSERVABILITY?.ensureApplicationTrace?.({
-      ...context,
-      href: window.location.href,
-      jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.() || null,
-      scheduleId: context.scheduleId || root.AMZ_URL.getScheduleIdFromUrl?.() || null,
-    }, {
-      source: 'content/createapp.js',
-      route: getApplicationHashRoute() || null,
-    });
-  }
-
-  function finalizeAcceptOfferObservability(pageUrl, workflowStepName, context, scheduleId) {
-    const observability = root.AMZ_APPLICATION_OBSERVABILITY;
-    if (!observability?.loadPendingTrace || !observability?.finalizeAndFlush) return;
-
-    const traceContext = {
-      ...context,
-      href: pageUrl,
-      jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
-      scheduleId,
-    };
-    void observability.loadPendingTrace(traceContext).then(trace => {
-      if (!trace) return null;
-      trace.applicationId = context.applicationId || trace.applicationId || null;
-      trace.scheduleId = scheduleId || trace.scheduleId || null;
-      trace.confirmedScheduleId = scheduleId || trace.confirmedScheduleId || null;
-      trace.pageUrl = pageUrl || trace.pageUrl || null;
-      return observability.finalizeAndFlush(trace, 'BOOKED', {
-        detailedOutcome: 'CONTINGENT_OFFER_ACCEPTED',
-        applicationId: trace.applicationId,
-        scheduleId: trace.scheduleId,
-        confirmedScheduleId: trace.confirmedScheduleId,
-        pageUrl: trace.pageUrl,
-        workflowStepName: workflowStepName || null,
-      }, traceContext);
-    }).catch(error => {
-      log.debug('accept offer observability finalization skipped', {
-        errorMessage: error?.message || String(error),
-      });
-    });
-  }
-
-  async function recordBookingCreditUsage(context, pageUrl, workflowStepName, scheduleId) {
-    try {
-      const usage = await root.AMZ_PAYMENT_GATE.recordBookingUsage({
-        jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
-        scheduleId: scheduleId || context.applicationId || null,
-        metadata: {
-          source: 'accept-offer-confirmed',
-          applicationId: context.applicationId || null,
-          workflowStepName: workflowStepName || null,
-          pageUrl,
-        },
-      });
-      if (!usage?.ok) {
-        log.warn('booking usage recording failed after accept offer confirmation', {
-          reason: usage?.reason || 'usage-denied',
-          jobId: context.jobId || null,
-          scheduleId,
-        });
-      }
-    } catch (error) {
-      log.warn('booking usage recording failed after accept offer confirmation', {
-        message: error?.message || String(error),
-        jobId: context.jobId || null,
-        scheduleId,
-      });
-    }
-  }
-
   function notifyAcceptOfferConfirmed(pageUrl = window.location.href, workflowStepName = getApplicationHashRoute()) {
-    if (acceptOfferState.notificationSent) return;
-    acceptOfferState.notificationSent = true;
+    if (acceptOfferState.confirmed) return;
+    acceptOfferState.confirmed = true;
     const context = getApplicationContext(pageUrl);
     const scheduleId = context.scheduleId || root.AMZ_URL.getScheduleIdFromUrl?.(pageUrl) || null;
-    finalizeAcceptOfferObservability(pageUrl, workflowStepName, context, scheduleId);
-    void recordBookingCreditUsage(context, pageUrl, workflowStepName, scheduleId);
     log.info('accept offer confirmed locally', {
       jobId: context.jobId || root.AMZ_URL.getJobIdFromUrl?.(pageUrl) || null,
       scheduleId,
@@ -283,7 +222,7 @@
   }
 
   function handlePendingAcceptOffer() {
-    if (!acceptOfferState.clicked || acceptOfferState.notificationSent) return false;
+    if (!acceptOfferState.clicked || acceptOfferState.confirmed) return false;
 
     const route = getApplicationHashRoute();
     if (route && route !== 'contingent-offer') {
@@ -300,7 +239,7 @@
       if (clickButton(button, 'accept offer', {
         key: buildClickKey('accept offer retry', button),
         retry: true,
-        clickOptions: { targetSelf: true, telemetryRetry: true },
+        clickOptions: { targetSelf: true },
       })) {
         acceptOfferState.retried = true;
         acceptOfferState.clickedAt = Date.now();
@@ -348,6 +287,11 @@
       find: findStartApplicationButton,
     }),
     Object.freeze({
+      route: 'assessment-consent',
+      label: 'start assessment',
+      find: findStartAssessmentButton,
+    }),
+    Object.freeze({
       route: 'job-opportunities',
       label: 'job opportunity',
       find: findJobOpportunityCard,
@@ -378,6 +322,8 @@
   function fallbackHandlersForRoute() {
     const route = getApplicationHashRoute();
     const handlers = [];
+
+    if (isAssessmentRoute(route)) return handlers;
 
     if (!route) {
       handlers.push({
@@ -429,7 +375,6 @@
 
   function attemptAutomation(trigger = 'scan') {
     if (!enabled) return;
-    trackRouteEntry();
 
     if (handleActiveApplicationModal()) return;
     if (handlePendingAcceptOffer()) return;
@@ -566,11 +511,10 @@
 
   function resetRunState() {
     clickedKeys.clear();
-    seenTraceRoutes.clear();
     acceptOfferState.clicked = false;
     acceptOfferState.clickedAt = 0;
     acceptOfferState.retried = false;
-    acceptOfferState.notificationSent = false;
+    acceptOfferState.confirmed = false;
   }
 
   function setEnabled(nextEnabled) {
@@ -582,33 +526,10 @@
       return;
     }
 
-    root.AMZ_PAYMENT_GATE.requireAllowed({ allowCache: true, refresh: false }).then(result => {
-      if (requestId !== enableRequestId) return;
-      if (!result.ok) {
-        enabled = false;
-        cleanup();
-        void root.AMZ_STORAGE.setLocal({
-          [root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE]: false,
-        });
-        log.warn('native application automation blocked by payment gate', {
-          reason: result.reason,
-        });
-        return;
-      }
-      enabled = true;
-      if (!wasEnabled) resetRunState();
-      ensureObserver();
-    }).catch(error => {
-      if (requestId !== enableRequestId) return;
-      enabled = false;
-      cleanup();
-      void root.AMZ_STORAGE.setLocal({
-        [root.AMZ_CONSTANTS.STORAGE_KEYS.ACTIVE]: false,
-      });
-      log.warn('native application automation payment check failed', {
-        errorMessage: error?.message || String(error),
-      });
-    });
+    if (requestId !== enableRequestId) return;
+    enabled = true;
+    if (!wasEnabled) resetRunState();
+    ensureObserver();
   }
 
   root.__amazonCreateAppAutomation = Object.freeze({

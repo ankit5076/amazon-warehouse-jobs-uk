@@ -12,6 +12,7 @@
 
   const STORAGE_KEYS = Object.freeze({
     ACTIVE: '__ap',
+    AMAZON_LOGIN_USERNAME: '__amz_login_username',
     USERNAME: '__amz_username',
     USER_EMAIL: '__un',
     LEGACY_USER_EMAIL: 'userEmail',
@@ -35,24 +36,12 @@
     AUTH_PROBE_UPDATED_AT: 'authProbeUpdatedAt',
     AUTH_PROBE_HTTP_STATUS: 'authProbeHttpStatus',
     AUTH_PROBE_DETAIL: 'authProbeDetail',
-    LOG_MODE: 'logMode',
-    APPLICATION_ATTEMPT_TRACE: 'applicationAttemptTrace',
-    LICENSE_BUYER_EMAIL: 'licenseBuyerEmail',
-    LICENSE_AMAZON_EMAIL: 'licenseAmazonEmail',
-    LICENSE_EMAIL: 'licenseEmail',
-    LICENSE_STATE: 'licenseState',
-    LICENSE_ALLOWED: 'licenseAllowed',
-    LICENSE_IS_PRO_USER: 'licenseIsProUser',
-    LICENSE_CHECKOUT_URL: 'licenseCheckoutUrl',
-    LICENSE_MESSAGE: 'licenseMessage',
-    LICENSE_CHECKED_AT: 'licenseCheckedAt',
-    LICENSE_SYNC_INTERVAL_MS: 'licenseSyncIntervalMs',
-    LICENSE_USAGE_KEYS: 'licenseUsageKeys',
   });
 
   const MESSAGE_ACTIONS = Object.freeze({
     ACTIVATE: 'activate',
     EXTENSION_STATE_CHANGED: 'extension_state_changed',
+    LOGOUT_AMAZON_SESSION: 'logout_amazon_session',
   });
 
   const USERNAME_REGEX = /\S/;
@@ -109,12 +98,16 @@
   ]);
 
   const UK_CITY_COORDINATES = Object.freeze({
+    'Baillieston': Object.freeze({ lat: 55.844513, lng: -4.113717 }),
     'Barking': Object.freeze({ lat: 51.53622, lng: 0.08148 }),
     'Barlborough': Object.freeze({ lat: 53.288311, lng: -1.288936 }),
     'Banbury': Object.freeze({ lat: 52.060181, lng: -1.340279 }),
+    'Basildon': Object.freeze({ lat: 51.570237, lng: 0.458357 }),
+    'Bathgate': Object.freeze({ lat: 55.900922, lng: -3.641483 }),
     'Bedford': Object.freeze({ lat: 52.136436, lng: -0.467504 }),
     'Belfast': Object.freeze({ lat: 54.597285, lng: -5.93012 }),
     'Birmingham': Object.freeze({ lat: 52.486244, lng: -1.890401 }),
+    'Bognor Regis': Object.freeze({ lat: 50.783497, lng: -0.673072 }),
     'Bolton': Object.freeze({ lat: 53.576864, lng: -2.428219 }),
     'Bournemouth': Object.freeze({ lat: 50.719164, lng: -1.880769 }),
     'Bradford': Object.freeze({ lat: 53.795984, lng: -1.759398 }),
@@ -132,34 +125,47 @@
     'Daventry': Object.freeze({ lat: 52.258319, lng: -1.160432 }),
     'Derby': Object.freeze({ lat: 52.92253, lng: -1.474619 }),
     'Doncaster': Object.freeze({ lat: 53.52282, lng: -1.128462 }),
+    'Dundee': Object.freeze({ lat: 56.460594, lng: -2.97019 }),
     'Dunstable': Object.freeze({ lat: 51.886017, lng: -0.520995 }),
     'Dunfermline': Object.freeze({ lat: 56.071741, lng: -3.452151 }),
     'Durham': Object.freeze({ lat: 54.77525, lng: -1.584852 }),
     'Edinburgh': Object.freeze({ lat: 55.953252, lng: -3.188267 }),
     'Enfield': Object.freeze({ lat: 51.652299, lng: -0.080711 }),
     'Exeter': Object.freeze({ lat: 50.718412, lng: -3.533899 }),
+    'Garden City': Object.freeze({ lat: 53.21517, lng: -3.006391 }),
+    'Gateshead': Object.freeze({ lat: 54.962579, lng: -1.601929 }),
     'Glasgow': Object.freeze({ lat: 55.864237, lng: -4.251806 }),
     'Gourock': Object.freeze({ lat: 55.96157, lng: -4.81789 }),
+    'Grays': Object.freeze({ lat: 51.47809, lng: 0.323313 }),
     'Hayes': Object.freeze({ lat: 51.512633, lng: -0.42031 }),
     'Hemel Hempstead': Object.freeze({ lat: 51.752725, lng: -0.469927 }),
     'Hinckley': Object.freeze({ lat: 52.541279, lng: -1.373363 }),
+    'Kegworth': Object.freeze({ lat: 52.838014, lng: -1.287638 }),
+    'Knowsley': Object.freeze({ lat: 53.425239, lng: -2.823599 }),
     'Leeds': Object.freeze({ lat: 53.800755, lng: -1.549077 }),
     'Leicester': Object.freeze({ lat: 52.636878, lng: -1.139759 }),
     'Liverpool': Object.freeze({ lat: 53.408371, lng: -2.991573 }),
     'London': Object.freeze({ lat: 51.507218, lng: -0.127586 }),
     'Luton': Object.freeze({ lat: 51.878671, lng: -0.420026 }),
+    'Maidstone': Object.freeze({ lat: 51.274826, lng: 0.523165 }),
     'Manchester': Object.freeze({ lat: 53.480759, lng: -2.242631 }),
     'Milton Keynes': Object.freeze({ lat: 52.040623, lng: -0.759417 }),
     'Middlesbrough': Object.freeze({ lat: 54.574227, lng: -1.234956 }),
     'Motherwell': Object.freeze({ lat: 55.78334, lng: -3.98339 }),
     'Newcastle': Object.freeze({ lat: 54.978252, lng: -1.61778 }),
     'Newcastle upon Tyne': Object.freeze({ lat: 54.978252, lng: -1.61778 }),
+    'North Ferriby': Object.freeze({ lat: 53.719226, lng: -0.505159 }),
     'Northampton': Object.freeze({ lat: 52.240477, lng: -0.902656 }),
+    'Norwich': Object.freeze({ lat: 52.628558, lng: 1.292395 }),
     'Nottingham': Object.freeze({ lat: 52.954783, lng: -1.158109 }),
     'Peterborough': Object.freeze({ lat: 52.569498, lng: -0.24053 }),
     'Plymouth': Object.freeze({ lat: 50.375456, lng: -4.142656 }),
+    'Poole': Object.freeze({ lat: 50.717947, lng: -1.981521 }),
+    'Port Talbot': Object.freeze({ lat: 51.595235, lng: -3.782415 }),
     'Portsmouth': Object.freeze({ lat: 50.819767, lng: -1.087977 }),
+    'Preston': Object.freeze({ lat: 53.759336, lng: -2.699272 }),
     'Reading': Object.freeze({ lat: 51.45512, lng: -0.978747 }),
+    'Rochdale': Object.freeze({ lat: 53.615366, lng: -2.155756 }),
     'Rugby': Object.freeze({ lat: 52.370878, lng: -1.265032 }),
     'Sheffield': Object.freeze({ lat: 53.381129, lng: -1.470085 }),
     'Slough': Object.freeze({ lat: 51.510538, lng: -0.595041 }),
@@ -175,24 +181,29 @@
     'Warrington': Object.freeze({ lat: 53.390044, lng: -2.59695 }),
     'Wembley': Object.freeze({ lat: 51.5588, lng: -0.2817 }),
     'Weybridge': Object.freeze({ lat: 51.371626, lng: -0.457904 }),
+    'Worsley': Object.freeze({ lat: 53.499933, lng: -2.378378 }),
   });
 
   const UK_DEFAULT_CITY_TAGS = Object.freeze([
     'London',
     'Enfield',
     'Barking',
+    'Basildon',
     'Bracknell',
     'Reading',
     'Theale',
     'Croydon',
     'Dartford',
+    'Grays',
     'Tilbury',
     'Wembley',
     'Hayes',
     'Weybridge',
     'Southampton',
     'Portsmouth',
+    'Poole',
     'Bournemouth',
+    'Bognor Regis',
     'Bristol',
     'Swindon',
     'Banbury',
@@ -207,6 +218,7 @@
     'Leicester',
     'Coalville',
     'Hinckley',
+    'Kegworth',
     'Birmingham',
     'Stoke-on-Trent',
     'Nottingham',
@@ -219,25 +231,38 @@
     'Bradford',
     'Manchester',
     'Warrington',
+    'Rochdale',
+    'Worsley',
     'Bolton',
     'Chesterfield',
     'Barlborough',
     'Liverpool',
     'St Helens',
+    'Knowsley',
     'Newcastle',
+    'Gateshead',
     'Durham',
     'Darlington',
     'Middlesbrough',
     'Carlisle',
     'Edinburgh',
+    'Bathgate',
     'Dunfermline',
+    'Dundee',
     'Glasgow',
+    'Baillieston',
     'Motherwell',
     'Gourock',
     'Swansea',
+    'Port Talbot',
     'Belfast',
     'Cardiff',
+    'Garden City',
     'Exeter',
+    'Maidstone',
+    'North Ferriby',
+    'Norwich',
+    'Preston',
   ]);
 
   const DISTANCE_OPTIONS = Object.freeze([
@@ -277,7 +302,6 @@
     features: Object.freeze({
       polling: true,
       scheduleAutomation: true,
-      telegram: false,
     }),
   });
 
@@ -321,44 +345,8 @@
   });
 
   const LOGGING = Object.freeze({
-    DEFAULT_MODE: 'standard',
     HIGH_FREQUENCY_THROTTLE_MS: 2000,
     POLLING_SUCCESS_THROTTLE_MS: 30000,
-    MODES: Object.freeze({
-      OFF: 'off',
-      STANDARD: 'standard',
-      DEBUG: 'debug',
-    }),
-    LEVELS: Object.freeze({
-      EVENT: 'event',
-      INFO: 'info',
-      WARN: 'warn',
-      ERROR: 'error',
-      DEBUG: 'debug',
-      TRACE: 'trace',
-    }),
-    CONSOLE_METHOD_BY_LEVEL: Object.freeze({
-      event: 'log',
-      info: 'info',
-      warn: 'warn',
-      error: 'error',
-      debug: 'debug',
-      trace: 'debug',
-    }),
-    STANDARD_LEVELS: Object.freeze([
-      'event',
-      'info',
-      'warn',
-      'error',
-    ]),
-    DEBUG_LEVELS: Object.freeze([
-      'event',
-      'info',
-      'warn',
-      'error',
-      'debug',
-      'trace',
-    ]),
   });
 
   const INSTALL_DEFAULTS = Object.freeze({
@@ -378,15 +366,6 @@
     [STORAGE_KEYS.JOB_SEARCH_FETCH_TIMEOUT_MS]: LOCAL_RUNTIME_DEFAULTS.jobSearch.fetchTimeoutMs,
     [STORAGE_KEYS.PAGE_REFRESH_JOB_SEARCH_INTERVAL_MS]: LOCAL_RUNTIME_DEFAULTS.pageRefresh.jobSearchIntervalMs,
     [STORAGE_KEYS.CITY_TAGS]: LOCAL_RUNTIME_DEFAULTS.defaultCityTags,
-    [STORAGE_KEYS.LOG_MODE]: LOGGING.DEFAULT_MODE,
-    [STORAGE_KEYS.LICENSE_EMAIL]: '',
-    [STORAGE_KEYS.LICENSE_ALLOWED]: false,
-    [STORAGE_KEYS.LICENSE_IS_PRO_USER]: false,
-    [STORAGE_KEYS.LICENSE_CHECKOUT_URL]: '',
-    [STORAGE_KEYS.LICENSE_MESSAGE]: '',
-    [STORAGE_KEYS.LICENSE_CHECKED_AT]: 0,
-    [STORAGE_KEYS.LICENSE_SYNC_INTERVAL_MS]: 0,
-    [STORAGE_KEYS.LICENSE_USAGE_KEYS]: {},
   });
 
   const RESET_DEFAULTS = Object.freeze({
@@ -404,22 +383,12 @@
     [STORAGE_KEYS.JOB_SEARCH_FETCH_TIMEOUT_MS]: LOCAL_RUNTIME_DEFAULTS.jobSearch.fetchTimeoutMs,
     [STORAGE_KEYS.PAGE_REFRESH_JOB_SEARCH_INTERVAL_MS]: LOCAL_RUNTIME_DEFAULTS.pageRefresh.jobSearchIntervalMs,
     [STORAGE_KEYS.CITY_TAGS]: LOCAL_RUNTIME_DEFAULTS.defaultCityTags,
-    [STORAGE_KEYS.LOG_MODE]: LOGGING.DEFAULT_MODE,
-    [STORAGE_KEYS.LICENSE_EMAIL]: '',
-    [STORAGE_KEYS.LICENSE_ALLOWED]: false,
-    [STORAGE_KEYS.LICENSE_IS_PRO_USER]: false,
-    [STORAGE_KEYS.LICENSE_CHECKOUT_URL]: '',
-    [STORAGE_KEYS.LICENSE_MESSAGE]: '',
-    [STORAGE_KEYS.LICENSE_CHECKED_AT]: 0,
-    [STORAGE_KEYS.LICENSE_SYNC_INTERVAL_MS]: 0,
-    [STORAGE_KEYS.LICENSE_USAGE_KEYS]: {},
   });
 
   const BACKEND = Object.freeze({
     PRODUCT_ID: 'amazon-warehouse-jobs-uk',
     PRODUCT_NAME: 'Amazon Warehouse Jobs UK',
     COUNTRY: 'United Kingdom',
-    DEFAULT_LICENSE_SYNC_INTERVAL_MS: 15 * 60 * 1000,
     FALLBACK_DEFAULTS: LOCAL_RUNTIME_DEFAULTS,
   });
 
@@ -447,6 +416,12 @@
     }),
     COUNTRY_CONFIGS,
     COUNTRY_CONFIG: ACTIVE_COUNTRY_CONFIG,
+    SESSION_COOKIE_DOMAINS: Object.freeze([
+      ACTIVE_COUNTRY_CONFIG.domain,
+      'jobsatamazon.co.uk',
+      ACTIVE_COUNTRY_CONFIG.authDomain,
+      'auth.hiring.amazon.com',
+    ]),
     GRAPHQL: Object.freeze({
       URL: 'https://' + ACTIVE_COUNTRY_CONFIG.domain + '/graphql',
       OPERATION_NAME: 'searchJobCardsByLocation',
@@ -621,7 +596,7 @@
   const POLLING = Object.freeze({
     FALLBACK_DELAY_MS: 850,
     SCHEDULE_JITTER_MIN_MS: 200,
-    SCHEDULE_JITTER_MAX_MS: 800,
+    SCHEDULE_JITTER_MAX_MS: 500,
     WAF_FORBIDDEN_BACKOFF_MS: 5000,
     AUTH_BACKOFF: Object.freeze({
       ERROR_THRESHOLD: 3,
@@ -651,9 +626,9 @@
     ROUTE_CHANGE_RESCAN_MS: 50,
     SCAN_INTERVAL_MS: 250,
     ACCEPT_OFFER_RETRY_DELAY_MS: 2000,
-    APPLICATION_OBSERVABILITY_PENDING_TTL_MS: 10 * 60 * 1000,
     BUTTON_TEXT: Object.freeze({
       START_APPLICATION: 'Start Application',
+      START_ASSESSMENT: 'Start Assessment',
       ACTIVE_APPLICATION_CONTINUE: 'Continue',
       SELECT_THIS_JOB: 'Select this job',
       ACCEPT_OFFER: 'Accept Offer',
@@ -665,13 +640,11 @@
     ACTIVE_APPLICATION_TITLE: 'You have an active job application',
     INJECTION_FILES: Object.freeze([
       'shared/constants.js',
-      'shared/utils/logger.js',
       'shared/utils/text.js',
       'shared/utils/url.js',
       'shared/utils/storage.js',
       'shared/utils/messaging.js',
       'content/utils/dom.js',
-      'content/utils/application-observability.js',
       'content/utils/alerts.js',
       'content/createapp.js',
     ]),
@@ -699,7 +672,7 @@
 
   const ALERTS = Object.freeze({
     JOB_FOUND_TOAST_DURATION_MS: 10000,
-    MATCHING_PROGRESS_LABEL: 'Found a Job, now we will match city',
+    MATCHING_PROGRESS_LABEL: 'Found a job. Matching city filters...',
     SOUND_FILE: 'assets/sounds/alert_long.wav',
     SESSION_UNAUTHORIZED_SOUND_FILE: 'assets/sounds/alert.wav',
     BOOKING_TERMINAL_SOUND_FILE: 'assets/sounds/alert.wav',
@@ -707,22 +680,6 @@
     SESSION_UNAUTHORIZED_SOUND_VOLUME: 1,
     BOOKING_TERMINAL_SOUND_VOLUME: 1,
     SESSION_UNAUTHORIZED_LOGIN_REDIRECT_DELAY_MS: 2000,
-  });
-
-  const PAYMENT_GATE = Object.freeze({
-    API_BASE_URL: 'https://getslotnow.com/extension-usage-tracker',
-    PRODUCT_ID: 'amazon-warehouse-jobs-uk',
-    COUNTRY: ACTIVE_COUNTRY_CONFIG.countryCode,
-    EXTENSION_NAME: 'Amazon Warehouse UK',
-    DEFAULT_SYNC_INTERVAL_MS: 15 * 60 * 1000,
-    RETRY_SYNC_INTERVAL_MS: 60 * 1000,
-    BOOKING_CACHE_MAX_AGE_MS: 5 * 60 * 1000,
-    ENDPOINTS: Object.freeze({
-      CHECK: '/api/amazon-warehouse-jobs-uk/license/check',
-      CHECKOUT: '/api/amazon-warehouse-jobs-uk/license/checkout',
-      PLANS: '/api/amazon-warehouse-jobs-uk/license/plans',
-      USAGE: '/api/amazon-warehouse-jobs-uk/license/usage',
-    }),
   });
 
   root.AMZ_CONSTANTS = Object.freeze({
@@ -745,7 +702,6 @@
     POLLING,
     CREATE_APPLICATION,
     SCHEDULE_AUTOMATION,
-    PAYMENT_GATE,
     ALERTS,
   });
 })(typeof globalThis !== 'undefined' ? globalThis : self);

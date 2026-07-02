@@ -47,14 +47,41 @@ describe("AMZ_TOASTS", () => {
         expect(html).not.toContain("30 km");
     });
 
-    it("explains that search is free but booking requires paid access", () => {
-        globalThis.AMZ_TOASTS.showCreditsRequiredPopup({ city: "London", jobId: "JOB-1" });
+    it("renders a booking confirmation toast", () => {
+        globalThis.AMZ_TOASTS.showBookingConfirmedToast({ jobId: "JOB-1", scheduleId: "SCH-1" });
 
         const config = globalThis.Swal.fire.mock.calls[0][0];
-        expect(config.title).toBe("Job search is free");
-        expect(config.html).toContain("booking requires paid access");
-        expect(config.html).toContain("30-Day");
-        expect(config.html).toContain("Pro");
-        expect(config.html).toContain("London");
+        expect(config.title).toBe("Booking confirmed");
+        expect(config.html).toContain("JOB-1");
+        expect(config.html).toContain("SCH-1");
+        expect(config.icon).toBe("success");
+    });
+
+    it("shows returned job locations while city filters are being matched", () => {
+        globalThis.AMZ_TOASTS.showJobsReceivedToast(650, [
+            { city: "Edinburgh" },
+            { city: "London" },
+            { city: "Edinburgh" },
+        ]);
+
+        const config = globalThis.Swal.fire.mock.calls[0][0];
+        expect(config.html).toContain("Found jobs in Edinburgh, London");
+        expect(config.html).toContain("Matching city filters");
+    });
+
+    it("shows the configured matched location in the job matched toast", () => {
+        globalThis.AMZ_TOASTS.showJobFoundToast({
+            job: { city: "", locationName: "Edinburgh Delivery Station" },
+            matchedLocation: {
+                tag: "Edinburgh",
+                field: "locationName",
+                value: "Edinburgh Delivery Station",
+            },
+        });
+
+        const config = globalThis.Swal.fire.mock.calls[0][0];
+        expect(config.title).toBe("Job matched for Edinburgh");
+        expect(config.html).toContain("Matching job in Edinburgh");
+        expect(config.html).toContain("Amazon location: Edinburgh Delivery Station");
     });
 });
